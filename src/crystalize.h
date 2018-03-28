@@ -51,7 +51,11 @@ void crystalize_schema_init(crystalize_schema_t* schema, const char* name, uint3
 void crystalize_schema_add(const crystalize_schema_t* schema);
 const crystalize_schema_t* crystalize_schema_get(uint32_t schema_name_id);
 
-void* crystalize_decode(uint32_t schema_name_id);
+// Encodes the given data structure into a buffer using the given schema.
+void crystalize_encode(uint32_t schema_name_id, const void* data, char** buf, uint32_t* buf_size);
+
+// Decodes the buffer IN PLACE using the given expected schema.
+void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size);
 
 #ifdef __cplusplus
 }
