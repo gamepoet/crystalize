@@ -3,8 +3,14 @@ project(crystalize)
 
 set(
   SRCS
-  src/crystalize.h
+  src/config.c
+  src/config.h
+  src/encode.c
+  src/encode.h
   src/crystalize.c
+  src/crystalize.h
+  src/hash.c
+  src/hash.h
 )
 
 # TODO: max out the warning settings for the compilers (why isn't there a generic way to do this?)

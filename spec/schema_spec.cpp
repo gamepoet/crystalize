@@ -32,27 +32,40 @@ struct buf_t {
 };
 
 std::ostream& operator<<(std::ostream& os, const buf_t& value) {
-  for (int index = 0; index < value.size; ++index) {
-    if ((index % 16) == 0) {
-      if (index != 0) {
-        os << "  ";
-        for (int ascii_index = 15; ascii_index >= 0; --ascii_index) {
-          char c = value.buf[index - ascii_index];
-          if (c >= 0x20 && c <= 0x7e) {
-            os << c;
-          }
-          else {
-            os << '.';
-          }
-        }
-        os << std::endl;
+  for (uint32_t offset = 0; offset < value.size; offset += 16) {
+    uint32_t count = value.size - offset;
+    if (count > 16) {
+      count = 16;
+    }
+
+    os << std::hex << std::setfill('0') << std::setw(8) << (unsigned int)offset << ":";
+    uint32_t index;
+    for (index = 0; index < count; ++index) {
+      if (index % 2 == 0) {
+        os << " ";
       }
-      os << std::hex << std::setfill('0') << std::setw(8) << (unsigned int)index << ":";
+      os << std::hex << std::setfill('0') << std::setw(2) << (unsigned int)((unsigned char*)value.buf)[offset + index];
     }
-    if (index % 2 == 0) {
-      os << " ";
+    for (; index < 16; ++index) {
+      if (index % 2 == 0) {
+        os << " ";
+      }
+      os << "  ";
     }
-    os << std::hex << std::setfill('0') << std::setw(2) << (unsigned int)((unsigned char*)value.buf)[index];
+    os << "  ";
+    for (index = 0; index < count; ++index) {
+      char c = value.buf[offset + index];
+      if (c >= 0x20 && c <= 0x7e) {
+        os << c;
+      }
+      else {
+        os << '.';
+      }
+    }
+    for (; index < 16; ++index) {
+      os << ' ';
+    }
+    os << std::endl;
   }
 	return os;
 }
@@ -74,8 +87,8 @@ TEST_CASE("schema registration") {
   SECTION("it allows a schema with fields") {
     crystalize_schema_t schema;
     crystalize_schema_field_t fields[2];
-    crystalize_schema_field_init(fields + 0, "a", CRYSTALIZE_BOOL, 1);
-    crystalize_schema_field_init(fields + 1, "b", CRYSTALIZE_INT32, 3);
+    crystalize_schema_field_init(fields + 0, "a", CRYSTALIZE_BOOL, 1, 0);
+    crystalize_schema_field_init(fields + 1, "b", CRYSTALIZE_INT32, 3, 0);
     crystalize_schema_init(&schema, "simple", 0, fields, 2);
 
     crystalize_schema_add(&schema);
@@ -95,8 +108,8 @@ TEST_CASE("encoding") {
   SECTION("it encodes a struct") {
     crystalize_schema_t schema;
     crystalize_schema_field_t fields[2];
-    crystalize_schema_field_init(fields + 0, "a", CRYSTALIZE_BOOL, 1);
-    crystalize_schema_field_init(fields + 1, "b", CRYSTALIZE_INT32, 3);
+    crystalize_schema_field_init(fields + 0, "a", CRYSTALIZE_BOOL, 1, 0);
+    crystalize_schema_field_init(fields + 1, "b", CRYSTALIZE_INT32, 3, 0);
     crystalize_schema_init(&schema, "simple", 0, fields, 2);
     crystalize_schema_add(&schema);
 
@@ -112,7 +125,7 @@ TEST_CASE("encoding") {
 
     unsigned char expected[] = {
       0x63, 0x72, 0x79, 0x73, // magic
-      0x01, 0x00, 0x00, 0x00, // encoding version
+      0x00, 0x00, 0x00, 0x00, // encoding version
       0x01, 0x00, 0x00, 0x00, // endian
       0x01, 0x00, 0x00, 0x00, // schema count
 
@@ -142,6 +155,13 @@ TEST_CASE("encoding") {
 
     buf_t buf_result;
     crystalize_encode(schema.name_id, &data, &buf_result.buf, &buf_result.size);
-    CHECK(buf_expected == buf_result);
+    CHECK(buf_result == buf_expected);
+
+    // decode it back
+    simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.size);
+    CHECK(decoded->a == true);
+    CHECK(decoded->b[0] == 1);
+    CHECK(decoded->b[1] == 2);
+    CHECK(decoded->b[2] == 3);
   }
 }
