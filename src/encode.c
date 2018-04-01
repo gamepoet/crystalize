@@ -13,7 +13,7 @@ extern crystalize_schema_t s_schema_schema;
 static const uint32_t FILE_VERSION = 0u;
 
 typedef struct schema_list_t {
-  const crystalize_schema_t** entries;
+  crystalize_schema_t* entries;
   int count;
   int capacity;
 } schema_list_t;
@@ -24,13 +24,8 @@ typedef struct buf_t {
   uint32_t capacity;
 } buf_t;
 
-typedef struct pointer_fixup_t {
-  void* from;     // pointer to the pointer that needs to be fixed
-  const void* to; // the destination of the pointer (in source space)
-} pointer_fixup_t;
-
 typedef struct pointer_fixup_list_t {
-  pointer_fixup_t* entries;
+  void*** entries; // list of addresses of pointers that need to be converted to offsets
   int count;
   int capacity;
 } pointer_fixup_list_t;
@@ -79,22 +74,23 @@ static void array_grow_if_needed(void* entries_ptr, int* count_ptr, int* capacit
   int capacity = *capacity_ptr;
   if (count >= capacity) {
     capacity += growth_step;
-
     entries = crystalize_realloc(entries, capacity * element_size);
     *capacity_ptr = capacity;
     *(void**)entries_ptr = entries;
   }
 }
 
-// static char* buf_pos(buf_t* buf) {
-//   return buf->buf + buf->cur;
-// }
+static char* buf_pos(buf_t* buf) {
+  return buf->buf + buf->cur;
+}
 
 static void buf_ensure(buf_t* buf, uint32_t count) {
   uint32_t new_cur = buf->cur + count;
   if (new_cur > buf->capacity) {
+    uint32_t old_capacity = buf->capacity;
     buf->capacity = (new_cur + 1023) & ~1023;
     buf->buf = (char*)crystalize_realloc(buf->buf, buf->capacity);
+    memset(buf->buf + old_capacity, 0xcc, (buf->capacity - old_capacity));
   }
 }
 
@@ -150,7 +146,7 @@ static void write_queue_shift(write_queue_t* queue) {
   }
 }
 
-static uint32_t get_type_alignment(crystalize_type_t type) {
+static uint32_t type_get_alignment(crystalize_type_t type) {
   switch (type) {
     case CRYSTALIZE_BOOL:
       return alignof(bool);
@@ -182,7 +178,7 @@ static uint32_t get_type_alignment(crystalize_type_t type) {
   }
 }
 
-static uint32_t get_type_size(crystalize_type_t type) {
+static uint32_t type_get_size(crystalize_type_t type) {
   switch (type) {
     case CRYSTALIZE_BOOL:
       return sizeof(bool);
@@ -214,8 +210,56 @@ static uint32_t get_type_size(crystalize_type_t type) {
   }
 }
 
-static uint32_t get_struct_alignment(const crystalize_schema_t* schema) {
-  return 4;
+static bool field_is_scalar(const crystalize_schema_field_t* field) {
+  return field->type != CRYSTALIZE_STRUCT;
+}
+static bool field_is_pointer(const crystalize_schema_field_t* field) {
+  return field->count == 0;
+}
+static bool field_is_pointer_counted(const crystalize_schema_field_t* field) {
+  return field->count == 0 && field->count_field_name_id != 0;
+}
+
+static uint32_t field_get_alignment(const crystalize_schema_field_t* field) {
+  if (field_is_pointer(field)) {
+    return alignof(void*);
+  }
+  else {
+    return type_get_alignment(field->type);
+  }
+}
+
+static uint32_t field_get_size(const crystalize_schema_field_t* field) {
+  if (field_is_pointer(field)) {
+    return sizeof(void*);
+  }
+  else {
+    return type_get_size(field->type);
+  }
+}
+
+static uint32_t field_get_value_as_uint32(const crystalize_schema_field_t* field, const void* data) {
+  switch (field->type) {
+    case CRYSTALIZE_INT8:
+      return (uint32_t)(*(const int8_t*)data);
+    case CRYSTALIZE_INT16:
+      return (uint32_t)(*(const int16_t*)data);
+    case CRYSTALIZE_INT32:
+      return (uint32_t)(*(const int32_t*)data);
+    case CRYSTALIZE_UINT8:
+      return (uint32_t)(*(const uint8_t*)data);
+    case CRYSTALIZE_UINT16:
+      return (uint32_t)(*(const uint16_t*)data);
+    case CRYSTALIZE_UINT32:
+      return (uint32_t)(*(const uint32_t*)data);
+    default:
+      crystalize_assert(false, "unsupported field type for the count of a counted pointer");
+      return 0;
+  }
+}
+
+static uint32_t struct_get_alignment(const crystalize_schema_t* schema) {
+  return schema->alignment;
 }
 
 static int schema_compare(const void* a, const void* b) {
@@ -235,23 +279,23 @@ static int schema_compare(const void* a, const void* b) {
 static void gather_schemas_impl(schema_list_t* schemas, const crystalize_schema_t* schema) {
   // check if the schema is already in the list
   for (int index = 0; index < schemas->count; ++index) {
-    if (schema->name_id == schemas->entries[index]->name_id) {
+    if (schema->name_id == schemas->entries[index].name_id) {
       // bail. already in the list
       return;
     }
   }
 
-  array_grow_if_needed(&schemas->entries, &schemas->count, &schemas->capacity, sizeof(crystalize_schema_t*), 128);
+  array_grow_if_needed(&schemas->entries, &schemas->count, &schemas->capacity, sizeof(crystalize_schema_t), 128);
 
   // add the schema to the list
-  schemas->entries[schemas->count] = schema;
+  schemas->entries[schemas->count] = *schema;
   ++schemas->count;
 
   // recurse on fields
   for (uint32_t index = 0; index < schema->field_count; ++index) {
     const crystalize_schema_field_t* field = schema->fields + index;
     if (field->type == CRYSTALIZE_STRUCT) {
-      const crystalize_schema_t* field_schema = crystalize_schema_get(field->complex_type_id);
+      const crystalize_schema_t* field_schema = crystalize_schema_get(field->struct_name_id);
       crystalize_assert(field_schema != NULL, "field has unknown schema");
       gather_schemas_impl(schemas, field_schema);
     }
@@ -260,49 +304,46 @@ static void gather_schemas_impl(schema_list_t* schemas, const crystalize_schema_
 
 static void gather_schemas(schema_list_t* schemas, const crystalize_schema_t* schema) {
   gather_schemas_impl(schemas, schema);
-  qsort(schemas->entries, schemas->count, sizeof(crystalize_schema_t*), &schema_compare);
+  qsort(schemas->entries, schemas->count, sizeof(crystalize_schema_t), &schema_compare);
 }
 
-// static void pointer_fixup_add(encoder_t* encoder, void* from, const void* to) {
-//   pointer_fixup_list_t* fixups = &encoder->pointer_fixups;
-//   array_grow_if_needed(&fixups->entries, &fixups->count, &fixups->capacity, sizeof(pointer_fixup_t), 128);
-//   pointer_fixup_t* entry = fixups->entries + fixups->count;
-//   entry->from = from;
-//   entry->to = to;
-//   ++fixups->count;
-// }
+static void pointer_fixup_add(encoder_t* encoder, void** addr) {
+  pointer_fixup_list_t* fixups = &encoder->pointer_fixups;
+  array_grow_if_needed(&fixups->entries, &fixups->count, &fixups->capacity, sizeof(void**), 128);
+  fixups->entries[fixups->count] = addr;
+  ++fixups->count;
+}
 
-// static void pointer_remap_add(encoder_t* encoder, const void* from, const void* to) {
-//   pointer_remap_list_t* remaps = &encoder->pointer_remaps;
-//   array_grow_if_needed(&remaps->entries, &remaps->count, &remaps->capacity, sizeof(pointer_remap_t), 128);
-//   pointer_remap_t* entry = remaps->entries + remaps->count;
-//   entry->from = from;
-//   entry->to = to;
-//   ++remaps->count;
-// }
+static void pointer_remap_add(encoder_t* encoder, const void* from, const void* to) {
+  pointer_remap_list_t* remaps = &encoder->pointer_remaps;
+  array_grow_if_needed(&remaps->entries, &remaps->count, &remaps->capacity, sizeof(pointer_remap_t), 128);
+  pointer_remap_t* entry = remaps->entries + remaps->count;
+  entry->from = from;
+  entry->to = to;
+  ++remaps->count;
+}
 
-// static void fixup_pointers(encoder_t* encoder) {
-//   pointer_fixup_list_t* fixups = &encoder->pointer_fixups;
-//   pointer_remap_list_t* remaps = &encoder->pointer_remaps;
-//   for (int fixup_index = 0; fixup_index < fixups->count; ++fixup_index) {
-//     const pointer_fixup_t* fixup = fixups->entries + fixup_index;
-//     void** addr = fixup->from;
-//     const void* dest_orig = fixup->to;
-//     const void* dest = NULL;
-//     for (int remap_index = 0; remap_index < remaps->count; ++remap_index) {
-//       const pointer_remap_t* remap = remaps->entries + remap_index;
-//       if (remap->from == dest_orig) {
-//         dest = remap->to;
-//         break;
-//       }
-//     }
-//     crystalize_assert(dest != NULL, "failed find remap target for fixup pointer");
-//
-//     // apply the remap as an offset
-//     intptr_t offset = (intptr_t)dest - (intptr_t)addr;
-//     *addr = (void*)offset;
-//   }
-// }
+static void convert_pointers_to_offsets(encoder_t* encoder) {
+  pointer_fixup_list_t* fixups = &encoder->pointer_fixups;
+  pointer_remap_list_t* remaps = &encoder->pointer_remaps;
+  for (int fixup_index = 0; fixup_index < fixups->count; ++fixup_index) {
+    void** addr = fixups->entries[fixup_index];
+    const void* dest_orig = *addr;
+    const void* dest = NULL;
+    for (int remap_index = 0; remap_index < remaps->count; ++remap_index) {
+      const pointer_remap_t* remap = remaps->entries + remap_index;
+      if (remap->from == dest_orig) {
+        dest = remap->to;
+        break;
+      }
+    }
+    crystalize_assert(dest != NULL, "failed find remap target for fixup pointer");
+
+    // apply the remap as an offset
+    intptr_t offset = (intptr_t)dest - (intptr_t)addr;
+    *addr = (void*)offset;
+  }
+}
 
 static void encoder_free(encoder_t* encoder) {
   array_free(&encoder->pointer_remaps.entries, &encoder->pointer_remaps.count, &encoder->pointer_remaps.capacity);
@@ -311,78 +352,127 @@ static void encoder_free(encoder_t* encoder) {
 
 static void write_scalars(encoder_t* encoder, crystalize_type_t type, uint32_t count, const void* data_in) {
   buf_t* buf = &encoder->buf;
-  const uint32_t alignment = get_type_alignment(type);
-  const uint32_t size = get_type_size(type);
+  const uint32_t alignment = type_get_alignment(type);
+  const uint32_t size = type_get_size(type);
   const char* data = (const char*)data_in;
 
+  // align the buffer and the input data
   buf_align(buf, alignment);
-  ALIGN_PTR(const char, data, alignment);
-  for (uint32_t index = 0; index < count; ++index) {
-    buf_write(buf, data, size);
-    data += size;
-  }
+  data = ALIGN_PTR(const char, data, alignment);
+
+  // copy everything as a single block
+  const uint32_t total_bytes = count * size;
+  buf_write(buf, data, total_bytes);
+  data += total_bytes;
 }
 
-static void write_structs(encoder_t* encoder, const crystalize_schema_t* schema, uint32_t count, const void* data_in) {
+static const char* write_struct(encoder_t* encoder, const crystalize_schema_t* schema, const char* data) {
   buf_t* buf = &encoder->buf;
-  const uint32_t alignment = get_struct_alignment(schema);
-  const char* data = (const char*)data_in;
+  const uint32_t struct_alignment = struct_get_alignment(schema);
 
-  buf_align(buf, alignment);
-  ALIGN_PTR(const char, data, alignment);
-  for (uint32_t arr_index = 0; arr_index < count; ++arr_index) {
-    for (uint32_t field_index = 0; field_index < schema->field_count; ++field_index) {
-      const crystalize_schema_field_t* field = schema->fields + field_index;
-      if (field->type == CRYSTALIZE_STRUCT) {
-        buf_write_u32(buf, 0xbbbbbbbbu);
-        data += 8;
+  // align the start of the struct
+  buf_align(buf, struct_alignment);
+  data = ALIGN_PTR(const char, data, struct_alignment);
+  const char* data_start = data;
+
+  // write out each field
+  for (uint32_t field_index = 0; field_index < schema->field_count; ++field_index) {
+    const crystalize_schema_field_t* field = schema->fields + field_index;
+
+    // // align to the field's desired alignment
+    // const uint32_t field_alignment = field_get_alignment(field);
+    // buf_align(buf, field_alignment);
+    // data = ALIGN_PTR(const char, data, field_alignment);
+
+    const bool is_scalar = field_is_scalar(field);
+    const bool is_pointer = field_is_pointer(field);
+    const bool is_pointer_counted = field_is_pointer_counted(field);
+    if (is_pointer) {
+      // align
+      buf_align(buf, alignof(void*));
+      data = ALIGN_PTR(const char, data, alignof(void*));
+
+      const void* ptr_value = *(const char**)data;
+      if (ptr_value == NULL) {
+        // NULL pointer. yay. just write out zeros and move on
+        buf_pad(buf, sizeof(void*));
+        data += sizeof(void*);
       }
       else {
-        const uint32_t field_alignment = get_type_alignment(field->type);
-        const uint32_t field_size = get_type_size(field->type);
+        // write out a pointer to be fixed up later
+        pointer_fixup_add(encoder, (void**)buf_pos(buf));
+        buf_write(buf, &ptr_value, sizeof(void*));
+        data += sizeof(void*);
 
-        // align for the type
+        uint32_t target_count = 1;
+        if (is_pointer_counted) {
+          // lookup the field containing the count
+          const crystalize_schema_field_t* count_field = NULL;
+          const char* data_field = data_start;
+          for (int index = 0; index < schema->field_count; ++index) {
+            data_field = ALIGN_PTR(const char, data_field, field_get_alignment(schema->fields + index));
+            if (schema->fields[index].name_id == field->count_field_name_id) {
+              count_field = schema->fields + index;
+              break;
+            }
+            data_field += field_get_size(schema->fields + index);
+          }
+          crystalize_assert(count_field != NULL, "failed to find the referenced count field for a counted pointer");
+
+          // extract the count
+          target_count = field_get_value_as_uint32(count_field, data_field);
+        }
+        write_queue_push(&encoder->todo_list, field->type, crystalize_schema_get(field->struct_name_id), target_count, ptr_value);
+      }
+    }
+    else {
+      // simple
+      if (is_scalar) {
+        // align to the scalar type
+        uint32_t field_alignment = type_get_alignment(field->type);
         buf_align(buf, field_alignment);
         data = ALIGN_PTR(const char, data, field_alignment);
 
-        // copy the field value
-        buf_write(buf, data, field_size);
-        data += field_size;
+        // simple scalar type, just copy it in
+        uint32_t byte_size = field->count * type_get_size(field->type);
+        buf_write(buf, data, byte_size);
+        data += byte_size;
+      }
+      else {
+        // recurse here
+        const crystalize_schema_t* field_schema = crystalize_schema_get(field->struct_name_id);
+        crystalize_assert(field_schema != NULL, "failed to find field schema");
+
+        // NOTE: write_struct() will do the alignment
+        data = write_struct(encoder, field_schema, data);
       }
     }
   }
-}
 
-static void write_typed_data(encoder_t* encoder, crystalize_type_t type, const crystalize_schema_t* schema, uint32_t arr_count, const void* data) {
-  if (type == CRYSTALIZE_STRUCT) {
-    write_structs(encoder, schema, arr_count, data);
-  }
-  else {
-    write_scalars(encoder, type, arr_count, data);
-  }
+  // pad out to the struct's alignment
+  buf_align(buf, struct_alignment);
+  data = ALIGN_PTR(const char, data, struct_alignment);
 
-  // // pad out to proper alignment
-  // const uint32_t alignment = get_alignment(type, is_pointer, schema);
-  // buf_align(&encoder->buf, alignment);
-  //
-  // // register this data as pointer target
-  // pointer_remap_add(encoder, data, buf_pos(&encoder->buf));
-  //
-  // for (uint32_t arr_index = 0; arr_index < arr_count; ++arr_index) {
-  //   for (uint32_t field_index = 0; field_index < schema->field_count; ++field_index) {
-  //
-  //   }
-  //
-  //   // pad out to the structure size
-  //   buf_align(&encoder->buf, alignment);
-  // }
+  return data;
 }
 
 static void encoder_run(encoder_t* encoder) {
   write_queue_t* todo_list = &encoder->todo_list;
   while (todo_list->count > 0) {
     write_queue_entry_t* todo = write_queue_first(todo_list);
-    write_typed_data(encoder, todo->type, todo->schema, todo->count, todo->data);
+    const char* data = todo->data;
+
+    pointer_remap_add(encoder, data, buf_pos(&encoder->buf));
+
+    if (todo->type == CRYSTALIZE_STRUCT) {
+      for (uint32_t index = 0; index < todo->count; ++index) {
+        data = write_struct(encoder, todo->schema, data);
+      }
+    }
+    else {
+      write_scalars(encoder, todo->type, todo->count, data);
+    }
+
     write_queue_shift(todo_list);
   }
 }
@@ -408,26 +498,16 @@ void encoder_encode(const crystalize_schema_t* schema, const void* data, char** 
   encoder_run(&encoder);
 
   // data
-  // write_queue_push(&encoder.todo_list, CRYSTALIZE_STRUCT, schema, 1, data);
-  // encoder_run(&encoder);
+  write_queue_push(&encoder.todo_list, CRYSTALIZE_STRUCT, schema, 1, data);
+  encoder_run(&encoder);
 
-  // data
-  // write_queue_push(&todo_list, CRYSTALIZE_POINTER, schema, data, 1);
-  // while (todo_list.count > 0) {
-  //   write_queue_entry_t* todo = write_queue_top(&todo_list);
-  //   for (uint32_t index = 0; index < todo->count; ++index) {
-  //     write_with_schema(&buffer, &pointer_table, &todo_list, todo->schema, todo->data);
-  //   }
-  //   write_queue_pop(&todo_list);
-  // }
-
-  // pointer_table_fixup_to_offsets(&pointer_table);
-  // pointer_table_free(&pointer_table);
+  // fixup the pointers
+  convert_pointers_to_offsets(&encoder);
 
   *buf = encoder.buf.buf;
   *buf_size = encoder.buf.cur;
 
-  // free the schemas gather buffer
+  // free the schemas gather buffer and the encoder
   array_free(&schemas.entries, &schemas.count, &schemas.capacity);
   encoder_free(&encoder);
 }
