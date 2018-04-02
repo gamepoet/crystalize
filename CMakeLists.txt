@@ -5,8 +5,9 @@ set(
   SRCS
   src/config.c
   src/config.h
-  src/encode.c
-  src/encode.h
+  src/encoder_decode.c
+  src/encoder_encode.c
+  src/encoder.h
   src/crystalize.c
   src/crystalize.h
   src/hash.c

@@ -1,4 +1,4 @@
-#include "encode.h"
+#include "encoder.h"
 #include "config.h"
 #include "crystalize.h"
 #include <stdalign.h>
@@ -9,8 +9,6 @@
 #define ALIGN_PTR(T, p, align) ((T*)ALIGN((uintptr_t)(p), (uintptr_t)align))
 
 extern crystalize_schema_t s_schema_schema;
-
-static const uint32_t FILE_VERSION = 0u;
 
 typedef struct schema_list_t {
   crystalize_schema_t* entries;
@@ -25,14 +23,14 @@ typedef struct buf_t {
 } buf_t;
 
 typedef struct pointer_fixup_list_t {
-  void*** entries; // list of addresses of pointers that need to be converted to offsets
+  uint32_t* entries; // list of offsets into the buffer of pointers that need to be fixed
   int count;
   int capacity;
 } pointer_fixup_list_t;
 
 typedef struct pointer_remap_t {
   const void* from; // the pointer address in source space
-  const void* to;   // the pointer address remapped in destination space
+  uint32_t to;      // the offset into the buffer where the pointer should map
 } pointer_remap_t;
 
 typedef struct pointer_remap_list_t {
@@ -78,10 +76,6 @@ static void array_grow_if_needed(void* entries_ptr, int* count_ptr, int* capacit
     *capacity_ptr = capacity;
     *(void**)entries_ptr = entries;
   }
-}
-
-static char* buf_pos(buf_t* buf) {
-  return buf->buf + buf->cur;
 }
 
 static void buf_ensure(buf_t* buf, uint32_t count) {
@@ -307,29 +301,30 @@ static void gather_schemas(schema_list_t* schemas, const crystalize_schema_t* sc
   qsort(schemas->entries, schemas->count, sizeof(crystalize_schema_t), &schema_compare);
 }
 
-static void pointer_fixup_add(encoder_t* encoder, void** addr) {
+static void pointer_fixup_add(encoder_t* encoder, uint32_t pos) {
   pointer_fixup_list_t* fixups = &encoder->pointer_fixups;
   array_grow_if_needed(&fixups->entries, &fixups->count, &fixups->capacity, sizeof(void**), 128);
-  fixups->entries[fixups->count] = addr;
+  fixups->entries[fixups->count] = pos;
   ++fixups->count;
 }
 
-static void pointer_remap_add(encoder_t* encoder, const void* from, const void* to) {
+static void pointer_remap_add(encoder_t* encoder, const void* from, uint32_t pos) {
   pointer_remap_list_t* remaps = &encoder->pointer_remaps;
   array_grow_if_needed(&remaps->entries, &remaps->count, &remaps->capacity, sizeof(pointer_remap_t), 128);
   pointer_remap_t* entry = remaps->entries + remaps->count;
   entry->from = from;
-  entry->to = to;
+  entry->to = pos;
   ++remaps->count;
 }
 
 static void convert_pointers_to_offsets(encoder_t* encoder) {
+  buf_t* buf = &encoder->buf;
   pointer_fixup_list_t* fixups = &encoder->pointer_fixups;
   pointer_remap_list_t* remaps = &encoder->pointer_remaps;
   for (int fixup_index = 0; fixup_index < fixups->count; ++fixup_index) {
-    void** addr = fixups->entries[fixup_index];
-    const void* dest_orig = *addr;
-    const void* dest = NULL;
+    const uint32_t offset_of_fixup = fixups->entries[fixup_index];
+    const void* dest_orig = *(const void**)(buf->buf + offset_of_fixup);
+    uint32_t dest = 0;
     for (int remap_index = 0; remap_index < remaps->count; ++remap_index) {
       const pointer_remap_t* remap = remaps->entries + remap_index;
       if (remap->from == dest_orig) {
@@ -337,11 +332,13 @@ static void convert_pointers_to_offsets(encoder_t* encoder) {
         break;
       }
     }
-    crystalize_assert(dest != NULL, "failed find remap target for fixup pointer");
+    crystalize_assert(dest != 0, "failed find remap target for fixup pointer");
 
     // apply the remap as an offset
-    intptr_t offset = (intptr_t)dest - (intptr_t)addr;
-    *addr = (void*)offset;
+    intptr_t offset = (int32_t)dest - (int32_t)offset_of_fixup;
+    *(int64_t*)(buf->buf + offset_of_fixup) = offset;
+
+    buf_write_u32(&encoder->buf, offset_of_fixup);
   }
 }
 
@@ -400,7 +397,7 @@ static const char* write_struct(encoder_t* encoder, const crystalize_schema_t* s
       }
       else {
         // write out a pointer to be fixed up later
-        pointer_fixup_add(encoder, (void**)buf_pos(buf));
+        pointer_fixup_add(encoder, buf->cur);
         buf_write(buf, &ptr_value, sizeof(void*));
         data += sizeof(void*);
 
@@ -462,7 +459,7 @@ static void encoder_run(encoder_t* encoder) {
     write_queue_entry_t* todo = write_queue_first(todo_list);
     const char* data = todo->data;
 
-    pointer_remap_add(encoder, data, buf_pos(&encoder->buf));
+    pointer_remap_add(encoder, data, encoder->buf.cur);
 
     if (todo->type == CRYSTALIZE_STRUCT) {
       for (uint32_t index = 0; index < todo->count; ++index) {
@@ -489,19 +486,32 @@ void encoder_encode(const crystalize_schema_t* schema, const void* data, char** 
   buf_write_u8(&encoder.buf, 0x72);
   buf_write_u8(&encoder.buf, 0x79);
   buf_write_u8(&encoder.buf, 0x73);
-  buf_write_u32(&encoder.buf, FILE_VERSION);
+  buf_write_u32(&encoder.buf, CRYSTALIZE_FILE_VERSION);
   buf_write_u32(&encoder.buf, 1);
+  const uint32_t header_data_start_offset = encoder.buf.cur;
+  buf_write_u32(&encoder.buf, 0); // offset to the start of the data buffer
+  const uint32_t pointer_table_start_offset = encoder.buf.cur;
+  buf_write_u32(&encoder.buf, 0); // offset to the start of the pointer fixup pointer_table
+  const uint32_t pointer_table_count_offset = encoder.buf.cur;
+  buf_write_u32(&encoder.buf, 0); // number of pointers in the pointer table
   buf_write_u32(&encoder.buf, schemas.count);
 
   // schemas
   write_queue_push(&encoder.todo_list, CRYSTALIZE_STRUCT, &s_schema_schema, schemas.count, schemas.entries);
   encoder_run(&encoder);
 
+  // write into the header the offset to the start of the data
+  buf_align(&encoder.buf, schema->alignment);
+  memmove(encoder.buf.buf + header_data_start_offset, &encoder.buf.cur, sizeof(uint32_t));
+
   // data
   write_queue_push(&encoder.todo_list, CRYSTALIZE_STRUCT, schema, 1, data);
   encoder_run(&encoder);
 
   // fixup the pointers
+  buf_align(&encoder.buf, alignof(uint32_t));
+  memmove(encoder.buf.buf + pointer_table_start_offset, &encoder.buf.cur, sizeof(uint32_t));
+  memmove(encoder.buf.buf + pointer_table_count_offset, &encoder.pointer_fixups.count, sizeof(uint32_t));
   convert_pointers_to_offsets(&encoder);
 
   *buf = encoder.buf.buf;

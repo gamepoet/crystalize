@@ -128,7 +128,12 @@ TEST_CASE("encoding") {
       0x63, 0x72, 0x79, 0x73, // magic
       0x00, 0x00, 0x00, 0x00, // encoding version
       0x01, 0x00, 0x00, 0x00, // endian
+      0x60, 0x00, 0x00, 0x00, // offset to the data section from the start of the file
+      0x70, 0x00, 0x00, 0x00, // offset to the pointer fixup table
+      0x01, 0x00, 0x00, 0x00, // pointer fixup count
       0x01, 0x00, 0x00, 0x00, // schema count
+
+      0x00, 0x00, 0x00, 0x00, // pad for alignment
 
       0x7f, 0x80, 0x66, 0x16, // fnv1a("simple")
       0x00, 0x00, 0x00, 0x00, // schema version
@@ -153,6 +158,8 @@ TEST_CASE("encoding") {
       0x01, 0x00, 0x00, 0x00, // int32: 1
       0x02, 0x00, 0x00, 0x00, // int32: 2
       0x03, 0x00, 0x00, 0x00, // int32: 3
+
+      0x30, 0x00, 0x00, 0x00, // pointer table
     };
     buf_t buf_expected;
     buf_expected.buf = (char*)expected;
@@ -163,10 +170,11 @@ TEST_CASE("encoding") {
     CHECK(buf_result == buf_expected);
 
     // decode it back
-    // simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.size);
-    // CHECK(decoded->a == true);
-    // CHECK(decoded->b[0] == 1);
-    // CHECK(decoded->b[1] == 2);
-    // CHECK(decoded->b[2] == 3);
+    simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.size);
+    CHECK(decoded != NULL);
+    CHECK(decoded->a == true);
+    CHECK(decoded->b[0] == 1);
+    CHECK(decoded->b[1] == 2);
+    CHECK(decoded->b[2] == 3);
   }
 }

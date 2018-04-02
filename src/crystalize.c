@@ -1,6 +1,6 @@
 #include "crystalize.h"
 #include "config.h"
-#include "encode.h"
+#include "encoder.h"
 #include "hash.h"
 #include <assert.h>
 #include <stdalign.h>
@@ -436,47 +436,7 @@ void crystalize_encode(uint32_t schema_name_id, const void* data, char** buf, ui
 void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size) {
   const int schema_index = schema_find(schema_name_id);
   crystalize_assert(schema_index != -1, "schema not found");
+  const crystalize_schema_t* schema = s_schemas + schema_index;
 
-  // buf_t buffer;
-  // buffer.buf = buf;
-  // buffer.capacity = buf_size;
-  // buffer.cur = 0;
-  //
-  // // ensure the whole file header is available
-  // if (buffer.capacity < 20) {
-  //   // TODO: report error: invalid header: short read
-  //   return NULL;
-  // }
-  //
-  // // read the file header
-  // const uint8_t* magic = buffer.buf + 0;
-  // const uint32_t file_version = *(uint32_t*)(buffer.buf + 4);
-  // const uint32_t endian = *(uint32_t*)(buffer.buf + 8);
-  // const uint32_t schema_count = *(uint32_t*)(buffer.buf + 12);
-  // const uint32_t field_count = *(uint32_t*)(buffer.buf + 16);
-  // buffer.cur = 20;
-  // if (magic[0] != 0x63 && magic[1] != 0x72 && magic[2] != 0x79 && magic[3] != 0x73) {
-  //   // TODO: report error: invalid header: magic mismatch
-  //   return NULL;
-  // }
-  // if (file_version != FILE_VERSION) {
-  //   // TODO: report error: invalid file format version
-  //   return NULL;
-  // }
-  // if (endian != 1u) {
-  //   // TODO: report error: endian mismatch
-  //   return NULL;
-  // }
-  //
-  // // read the schemas
-  // crystalize_schema_t* schemas = (crystalize_schema_t*)crystalize_malloc(schema_count * sizeof(crystalize_schema_t));
-  // crystalize_schema_field_t* fields = (crystalize_schema_field_t*)crystalize_malloc(field_count *
-  // sizeof(crystalize_schema_field_t)); int schema_cur = 0; int field_cur = 0; for (uint32_t index = 0; index <
-  // schema_count; ++index) {
-  //   crystalize_schema_t* schema = schemas + schema_cur;
-  //   crystalize_schema_field_t* field_beg = fields + field_cur;
-  //   read_schema(&buffer, schema, field_beg);
-  // }
-
-  return NULL;
+  return encoder_decode(schema, buf, buf_size);
 }
