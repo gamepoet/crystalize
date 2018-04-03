@@ -18,22 +18,16 @@ struct init_t {
   }
 };
 
-struct buf_t {
-  char* buf;
-  uint32_t size;
-  uint32_t capacity;
-
-  bool operator==(const buf_t& other) const {
-    if (size != other.size) {
-      return false;
-    }
-    return 0 == memcmp(buf, other.buf, size);
+bool operator==(const crystalize_encode_result_t& a, const crystalize_encode_result_t& b) {
+  if (a.buf_size != b.buf_size) {
+    return false;
   }
-};
+  return 0 == memcmp(a.buf, b.buf, a.buf_size);
+}
 
-std::ostream& operator<<(std::ostream& os, const buf_t& value) {
-  for (uint32_t offset = 0; offset < value.size; offset += 16) {
-    uint32_t count = value.size - offset;
+std::ostream& operator<<(std::ostream& os, const crystalize_encode_result_t& value) {
+  for (uint32_t offset = 0; offset < value.buf_size; offset += 16) {
+    uint32_t count = value.buf_size - offset;
     if (count > 16) {
       count = 16;
     }
@@ -161,23 +155,23 @@ TEST_CASE("encoding") {
 
         0x30, 0x00, 0x00, 0x00, // pointer table
     };
-    buf_t buf_expected;
+    crystalize_encode_result_t buf_expected = {0};
     buf_expected.buf = (char*)expected;
-    buf_expected.size = sizeof(expected);
+    buf_expected.buf_size = sizeof(expected);
 
-    buf_t buf_result;
-    crystalize_encode(schema.name_id, &data, &buf_result.buf, &buf_result.size);
+    crystalize_encode_result_t buf_result;
+    crystalize_encode(schema.name_id, &data, &buf_result);
     CHECK(buf_result == buf_expected);
 
     // decode it back
-    simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.size);
+    simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.buf_size);
     CHECK(decoded != NULL);
     CHECK(decoded->a == true);
     CHECK(decoded->b[0] == 1);
     CHECK(decoded->b[1] == 2);
     CHECK(decoded->b[2] == 3);
 
-    crystalize_encode_free_buf(buf_result.buf);
+    crystalize_encode_result_free(&buf_result);
   }
 
   SECTION("it encodes a struct with scalar pointers") {
@@ -201,12 +195,12 @@ TEST_CASE("encoding") {
     data.b = values;
 
     // encode it
-    buf_t buf_result;
-    crystalize_encode(schema.name_id, &data, &buf_result.buf, &buf_result.size);
-    CHECK(buf_result.size != 0);
+    crystalize_encode_result_t buf_result;
+    crystalize_encode(schema.name_id, &data, &buf_result);
+    CHECK(buf_result.error == CRYSTALIZE_ERROR_NONE);
 
     // decode it back
-    root_t* decoded = (root_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.size);
+    root_t* decoded = (root_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.buf_size);
     CHECK(decoded != NULL);
     CHECK(decoded->a == 'a');
     CHECK(decoded->b_count == 4);
@@ -215,7 +209,7 @@ TEST_CASE("encoding") {
     CHECK(decoded->b[2] == 3.0f);
     CHECK(decoded->b[3] == 4.0f);
 
-    crystalize_encode_free_buf(buf_result.buf);
+    crystalize_encode_result_free(&buf_result);
   }
 
   SECTION("it encodes a struct field") {
@@ -249,18 +243,18 @@ TEST_CASE("encoding") {
     data.c = 0x12345678;
 
     // encode it
-    buf_t buf_result;
-    crystalize_encode(schema_root.name_id, &data, &buf_result.buf, &buf_result.size);
-    CHECK(buf_result.size != 0);
+    crystalize_encode_result_t buf_result;
+    crystalize_encode(schema_root.name_id, &data, &buf_result);
+    CHECK(buf_result.error == CRYSTALIZE_ERROR_NONE);
 
     // decode it back
-    root_t* decoded = (root_t*)crystalize_decode(schema_root.name_id, buf_result.buf, buf_result.size);
+    root_t* decoded = (root_t*)crystalize_decode(schema_root.name_id, buf_result.buf, buf_result.buf_size);
     CHECK(decoded != NULL);
     CHECK(decoded->a == 100);
     CHECK(decoded->b.a == 101);
     CHECK(decoded->b.b == 255);
     CHECK(decoded->c == 0x12345678);
 
-    crystalize_encode_free_buf(buf_result.buf);
+    crystalize_encode_result_free(&buf_result);
   }
 }

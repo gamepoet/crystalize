@@ -37,17 +37,6 @@
 // #define sda_contains(a, item) \
 //   for (int index = 0; index < )
 
-// #define ALIGN(x, align) (((x) + (align)-1) & (~((align)-1)))
-// #define ALIGN_PTR(T, p, align) ((T*)ALIGN((uintptr_t)(p), (uintptr_t)align))
-
-// #define PACKED_SET_POINTER_FLAG(packed, val) (((packed) & 0xfffffffe) | ((val) & 0x1))
-// #define PACKED_GET_POINTER_FLAG(packed, val) ((()))
-// #define PACKED_SET_TYPE(packed, val) (((packed) >> 1) & 0xfu)
-//
-// #define FIELD_TYPE(field) ((field)->type_count_packed & 0xfu)
-// #define FIELD_COUNT(field) (((field)->type_count_packed & 0xfffffff0u) >> 4)
-// #define FIELD_SET_TYPE_COUNT(field, type, count) ((field)->type_count_packed = (((count) << 4) | ((type)&0xfu)))
-
 static int s_schemas_capacity;
 static int s_schemas_count;
 static crystalize_schema_t* s_schemas;
@@ -56,252 +45,6 @@ crystalize_schema_t s_schema_schema;       // the schema for crystalize_schema_t
 static crystalize_schema_t s_schema_schema_field; // the schema for crystalize_schema_field_t
 static crystalize_schema_field_t s_schema_schema_fields[5];
 static crystalize_schema_field_t s_schema_schema_field_fields[5];
-
-// typedef struct buf_t {
-//   char* buf;
-//   uint32_t cur;
-//   uint32_t capacity;
-// } buf_t;
-//
-// typedef struct pointer_fixup_t {
-//   void* addr;
-//   const void* target;
-// } pointer_fixup_t;
-//
-// typedef struct pointer_remap_t {
-//   const void* addr;
-//   const void* target;
-// } pointer_remap_t;
-//
-// typedef struct pointer_table_t {
-//   pointer_fixup_t* fixups;
-//   pointer_remap_t* remaps;
-//   int fixups_count;
-//   int fixups_capacity;
-//   int remaps_count;
-//   int remaps_capacity;
-// } pointer_table_t;
-//
-// typedef struct write_queue_entry_t {
-//   const crystalize_schema_t* schema;
-//   const void* data;
-//   uint32_t count;
-//   crystalize_type_t type;
-// } write_queue_entry_t;
-//
-// typedef struct write_queue_t {
-//   write_queue_entry_t* entries;
-//   int count;
-//   int capacity;
-// } write_queue_t;
-
-// void write_queue_push(
-//     write_queue_t* queue, crystalize_type_t type, const crystalize_schema_t* schema, const void* data, uint32_t count) {
-//   if (queue->count >= queue->capacity) {
-//     queue->capacity += 128;
-//     queue->entries =
-//         (write_queue_entry_t*)crystalize_realloc(queue->entries, queue->capacity * sizeof(write_queue_entry_t));
-//   }
-//   write_queue_entry_t* entry = queue->entries + queue->count;
-//   entry->type = type;
-//   entry->schema = schema;
-//   entry->data = data;
-//   entry->count = count;
-//   ++queue->count;
-// }
-//
-// write_queue_entry_t* write_queue_top(write_queue_t* queue) {
-//   return queue->entries + (queue->count - 1);
-// }
-//
-// void write_queue_pop(write_queue_t* queue) {
-//   --queue->count;
-// }
-
-// static void pointer_table_fixup_to_offsets(const pointer_table_t* table) {
-// }
-//
-// static void pointer_table_free(pointer_table_t* table) {
-//   crystalize_free(table->fixups);
-//   crystalize_free(table->remaps);
-//   table->fixups = NULL;
-//   table->remaps = NULL;
-//   table->fixups_count = 0;
-//   table->fixups_capacity = 0;
-//   table->remaps_count = 0;
-//   table->remaps_capacity = 0;
-// }
-
-// typedef struct writer_t {
-//   buf_t buf;
-//   void** pointers;
-//
-//   uint32_t pointers_count;
-//   uint32_t pointers_capacity;
-// } writer_t;
-
-// typedef struct reader_t {
-//   buf_t buf;
-//   bool error;
-// } reader_t;
-
-// static void buffer_write_u64(buf_t* buf, uint64_t value) {
-//   buffer_align(buf, 8);
-//   buffer_ensure(buf, 8);
-//   memmove(buf->buf + buf->cur, &value, sizeof(uint64_t));
-//   buf->cur += 8;
-// }
-
-// static void buffer_write(buf_t* buf, const void* data, uint32_t size) {
-//   buffer_ensure(buf, size);
-//   memmove(buf->buf + buf->cur, data, size);
-//   buf->cur += size;
-// }
-
-// static void write_schema(buf_t* buf, const crystalize_schema_t* schema) {
-//   buffer_write_u32(buf, schema->name_id);
-//   buffer_write_u32(buf, schema->version);
-//   buffer_write_u32(buf, schema->field_count);
-//   if (schema->fields == NULL) {
-//     buffer_write_u64(buf, 0xffffffffffffffffull);
-//   }
-//   else {
-//     buffer_write_u64(buf, 8);  // offset to the fields data
-//   }
-//   for (uint32_t index = 0; index < schema->field_count; ++index) {
-//     const crystalize_schema_field_t* field = schema->fields + index;
-//     buffer_write_u32(buf, field->name_id);
-//     buffer_write_u32(buf, field->type_count_packed);
-//     buffer_write_u32(buf, field->ref_type_name_id);
-//   }
-// }
-
-// static uint32_t get_type_alignment(crystalize_type_t type) {
-//   switch (type) {
-//     case CRYSTALIZE_BOOL:
-//       return alignof(bool);
-//     case CRYSTALIZE_CHAR:
-//       return alignof(char);
-//     case CRYSTALIZE_INT8:
-//       return alignof(int8_t);
-//     case CRYSTALIZE_INT16:
-//       return alignof(int16_t);
-//     case CRYSTALIZE_INT32:
-//       return alignof(int32_t);
-//     case CRYSTALIZE_INT64:
-//       return alignof(int64_t);
-//     case CRYSTALIZE_UINT8:
-//       return alignof(uint8_t);
-//     case CRYSTALIZE_UINT16:
-//       return alignof(uint16_t);
-//     case CRYSTALIZE_UINT32:
-//       return alignof(uint32_t);
-//     case CRYSTALIZE_UINT64:
-//       return alignof(uint64_t);
-//     case CRYSTALIZE_FLOAT:
-//       return alignof(float);
-//     case CRYSTALIZE_DOUBLE:
-//       return alignof(double);
-//     case CRYSTALIZE_POINTER:
-//       return alignof(void*);
-//     default:
-//       crystalize_assert(false, "unknown field type");
-//       return 0;
-//   }
-// }
-//
-// static uint32_t get_type_size(crystalize_type_t type) {
-//   switch (type) {
-//     case CRYSTALIZE_BOOL:
-//       return sizeof(bool);
-//     case CRYSTALIZE_CHAR:
-//       return sizeof(char);
-//     case CRYSTALIZE_INT8:
-//       return sizeof(int8_t);
-//     case CRYSTALIZE_INT16:
-//       return sizeof(int16_t);
-//     case CRYSTALIZE_INT32:
-//       return sizeof(int32_t);
-//     case CRYSTALIZE_INT64:
-//       return sizeof(int64_t);
-//     case CRYSTALIZE_UINT8:
-//       return sizeof(uint8_t);
-//     case CRYSTALIZE_UINT16:
-//       return sizeof(uint16_t);
-//     case CRYSTALIZE_UINT32:
-//       return sizeof(uint32_t);
-//     case CRYSTALIZE_UINT64:
-//       return sizeof(uint64_t);
-//     case CRYSTALIZE_FLOAT:
-//       return sizeof(float);
-//     case CRYSTALIZE_DOUBLE:
-//       return sizeof(double);
-//     case CRYSTALIZE_POINTER:
-//       return sizeof(void*);
-//     default:
-//       crystalize_assert(false, "unknown field type");
-//       return 0;
-//   }
-// }
-
-// static uint32_t get_struct_alignment(const crystalize_schema_t* schema) {
-//   uint32_t alignment = 0;
-//   for (int index = 0; index < schema->field_count; ++index) {
-//     const crystalize_schema_field_t* field = schema->fields + index;
-//     uint32_t field_alignment = get_type_alignment(FIELD_TYPE(field));
-//     if (field_alignment > alignment) {
-//       alignment = field_alignment;
-//     }
-//   }
-//   return alignment;
-// }
-
-// static void write_with_schema(buf_t* buf,
-//                               pointer_table_t* pointer_table,
-//                               write_queue_t* todo_list,
-//                               const crystalize_schema_t* schema,
-//                               const void* data_in) {
-//   const char* data = (const char*)data_in;
-//
-//   // pad out to the struct alignment
-//   const uint32_t struct_alignment = get_struct_alignment(schema);
-//   buffer_align(buf, struct_alignment);
-//
-//   pointer_table_add_remap(pointer_table, data, buf->buf + buf->cur);
-//
-//   for (int index = 0; index < schema->field_count; ++index) {
-//     const crystalize_schema_field_t* field = schema->fields + index;
-//     const crystalize_type_t field_type = (crystalize_type_t)FIELD_TYPE(field);
-//     const uint32_t field_count = FIELD_COUNT(field);
-//     const uint32_t alignment = get_type_alignment(field_type);
-//     const uint32_t field_size = get_type_size(field_type);
-//
-//     for (uint32_t arr_index = 0; arr_index < field_count; ++arr_index) {
-//       // align for the type
-//       data = ALIGN_PTR(const char, data, alignment);
-//       buffer_align(buf, alignment);
-//
-//       // copy in the field value
-//       if (field_type != CRYSTALIZE_POINTER) {
-//         buffer_write(buf, data, field_size);
-//       }
-//       else {
-//         if (data != NULL) {
-//           // record the pointer for fixup later
-//           pointer_table_add_fixup(pointer_table, buf->buf + buf->cur, data);
-//
-//           // add the pointee to the todo list
-//           const crystalize_schema_t* field_schema = NULL;
-//           crystalize_schema_get(field->ref_type_name_id);
-//           crystalize_assert(field_schema != NULL, "pointer field references unknown schema type");
-//           write_queue_push(todo_list, field_type, field_schema, data, field_count);
-//         }
-//         buffer_pad(buf, field_size);
-//       }
-//       data += field_size;
-//     }
-//   }
-// }
 
 static int schema_find(uint32_t name_id) {
   for (int index = 0; index < s_schemas_count; ++index) {
@@ -363,6 +106,7 @@ void crystalize_schema_field_init_scalar(crystalize_schema_field_t* field,
                                   crystalize_type_t type,
                                   uint32_t count) {
   crystalize_assert(field != NULL, "field cannot be null");
+  crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(count > 0, "cannot have zero count");
   field->name_id = fnv1a(name, strlen(name));
   field->struct_name_id = 0;
@@ -376,6 +120,7 @@ void crystalize_schema_field_init_struct(crystalize_schema_field_t* field,
                                          const crystalize_schema_t* schema,
                                          uint32_t count) {
   crystalize_assert(field != NULL, "field cannot be null");
+  crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(schema != NULL, "schema cannot be null");
   crystalize_assert(count > 0, "cannot have zero count");
   field->name_id = fnv1a(name, strlen(name));
@@ -391,6 +136,8 @@ void crystalize_schema_field_init_counted_scalar(crystalize_schema_field_t* fiel
                                                  const char* count_field_name)
 {
   crystalize_assert(field != NULL, "field cannot be null");
+  crystalize_assert(name != NULL, "name cannot be null");
+  crystalize_assert(count_field_name != NULL, "count_field_name cannot be null");
   field->name_id = fnv1a(name, strlen(name));
   field->struct_name_id = 0;
   field->count = 0;
@@ -403,6 +150,9 @@ void crystalize_schema_field_init_counted_struct(crystalize_schema_field_t* fiel
                                   const crystalize_schema_t* schema,
                                   const char* count_field_name) {
   crystalize_assert(field != NULL, "field cannot be null");
+  crystalize_assert(name != NULL, "name cannot be null");
+  crystalize_assert(schema != NULL, "schema cannot be null");
+  crystalize_assert(count_field_name != NULL, "name cannot be null");
   field->name_id = fnv1a(name, strlen(name));
   field->struct_name_id = schema->name_id;
   field->count = 0;
@@ -453,16 +203,31 @@ const crystalize_schema_t* crystalize_schema_get(uint32_t schema_name_id) {
   }
 }
 
-void crystalize_encode(uint32_t schema_name_id, const void* data, char** buf, uint32_t* buf_size) {
+void crystalize_encode(uint32_t schema_name_id, const void* data, crystalize_encode_result_t* result) {
+  crystalize_assert(result, "result cannot be null");
   const int schema_index = schema_find(schema_name_id);
   crystalize_assert(schema_index != -1, "schema not found");
   const crystalize_schema_t* schema = s_schemas + schema_index;
 
-  encoder_encode(schema, data, buf, buf_size);
+  result->buf = NULL;
+  result->buf_size = 0;
+  result->error = CRYSTALIZE_ERROR_NONE;
+  result->error_message = NULL;
+  encoder_encode(schema, data, result);
 }
 
-void crystalize_encode_free_buf(char* buf) {
-  crystalize_free(buf);
+void crystalize_encode_result_free(crystalize_encode_result_t* result) {
+  crystalize_assert(result, "result cannot be null");
+  if (result->buf != NULL) {
+    crystalize_free(result->buf);
+    result->buf = NULL;
+  }
+  if (result->error_message != NULL) {
+    crystalize_free(result->error_message);
+    result->error_message = NULL;
+  }
+  result->buf_size = 0;
+  result->error = CRYSTALIZE_ERROR_NONE;
 }
 
 void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size) {

@@ -2,6 +2,7 @@
 #include "config.h"
 #include "crystalize.h"
 #include <stdalign.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -270,7 +271,7 @@ static int schema_compare(const void* a, const void* b) {
   }
 }
 
-static void gather_schemas_impl(schema_list_t* schemas, const crystalize_schema_t* schema) {
+static void gather_schemas_impl(crystalize_encode_result_t* result, schema_list_t* schemas, const crystalize_schema_t* schema) {
   // check if the schema is already in the list
   for (int index = 0; index < schemas->count; ++index) {
     if (schema->name_id == schemas->entries[index].name_id) {
@@ -290,15 +291,24 @@ static void gather_schemas_impl(schema_list_t* schemas, const crystalize_schema_
     const crystalize_schema_field_t* field = schema->fields + index;
     if (field->type == CRYSTALIZE_STRUCT) {
       const crystalize_schema_t* field_schema = crystalize_schema_get(field->struct_name_id);
-      crystalize_assert(field_schema != NULL, "field has unknown schema");
-      gather_schemas_impl(schemas, field_schema);
+      if (field_schema == NULL) {
+        int err_msg_len = snprintf(NULL, 0, "field has unknown schema. schema_name_id=%08x field_name_id=%08x field_struct_schema_name_id=%08x", schema->name_id, field->name_id, field->struct_name_id);
+        char* err_msg = (char*)crystalize_alloc(err_msg_len + 1);
+        snprintf(err_msg, err_msg_len + 1, "field has unknown schema. schema_name_id=%08x field_name_id=%08x field_struct_schema_name_id=%08x", schema->name_id, field->name_id, field->struct_name_id);
+        result->error = CRYSTALIZE_ERROR_SCHEMA_NOT_FOUND;
+        result->error_message = err_msg;
+        return;
+      }
+      gather_schemas_impl(result, schemas, field_schema);
     }
   }
 }
 
-static void gather_schemas(schema_list_t* schemas, const crystalize_schema_t* schema) {
-  gather_schemas_impl(schemas, schema);
-  qsort(schemas->entries, schemas->count, sizeof(crystalize_schema_t), &schema_compare);
+static void gather_schemas(crystalize_encode_result_t* result, schema_list_t* schemas, const crystalize_schema_t* schema) {
+  gather_schemas_impl(result, schemas, schema);
+  if (result->error != CRYSTALIZE_ERROR_NONE) {
+    qsort(schemas->entries, schemas->count, sizeof(crystalize_schema_t), &schema_compare);
+  }
 }
 
 static void pointer_fixup_add(encoder_t* encoder, uint32_t pos) {
@@ -414,7 +424,7 @@ static const char* write_struct(encoder_t* encoder, const crystalize_schema_t* s
             }
             data_field += field_get_size(schema->fields + index);
           }
-          crystalize_assert(count_field != NULL, "failed to find the referenced count field for a counted pointer");
+          crystalize_assert(count_field != NULL, "internal error: failed to find the referenced count field for a counted pointer");
 
           // extract the count
           target_count = field_get_value_as_uint32(count_field, data_field);
@@ -474,12 +484,15 @@ static void encoder_run(encoder_t* encoder) {
   }
 }
 
-void encoder_encode(const crystalize_schema_t* schema, const void* data, char** buf, uint32_t* buf_size) {
+void encoder_encode(const crystalize_schema_t* schema, const void* data, crystalize_encode_result_t* result) {
   encoder_t encoder = {{0}};
 
   // gather up and count up all the unique schemas
   schema_list_t schemas = {0};
-  gather_schemas(&schemas, schema);
+  gather_schemas(result, &schemas, schema);
+  if (result->error != CRYSTALIZE_ERROR_NONE) {
+    return;
+  }
 
   // file header
   buf_write_u8(&encoder.buf, 0x63);
@@ -514,8 +527,8 @@ void encoder_encode(const crystalize_schema_t* schema, const void* data, char** 
   memmove(encoder.buf.buf + pointer_table_count_offset, &encoder.pointer_fixups.count, sizeof(uint32_t));
   convert_pointers_to_offsets(&encoder);
 
-  *buf = encoder.buf.buf;
-  *buf_size = encoder.buf.cur;
+  result->buf = encoder.buf.buf;
+  result->buf_size = encoder.buf.cur;
 
   // free the schemas gather buffer and the encoder
   array_free(&schemas.entries, &schemas.count, &schemas.capacity);

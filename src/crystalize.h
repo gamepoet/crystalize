@@ -23,6 +23,11 @@ typedef enum crystalize_type_t {
   CRYSTALIZE_STRUCT,
 } crystalize_type_t;
 
+typedef enum crystalize_error_t {
+  CRYSTALIZE_ERROR_NONE,
+  CRYSTALIZE_ERROR_SCHEMA_NOT_FOUND,
+} crystalize_error_t;
+
 typedef struct crystalize_schema_field_t {
   uint32_t name_id;             // hash(name) of this field
   uint32_t struct_name_id;      // the hash(name) for the struct (if type is struct)
@@ -38,6 +43,13 @@ typedef struct crystalize_schema_t {
   uint32_t field_count;
   const crystalize_schema_field_t* fields;
 } crystalize_schema_t;
+
+typedef struct crystalize_encode_result_t {
+  char* buf;
+  uint32_t buf_size;
+  crystalize_error_t error;
+  char* error_message;
+} crystalize_encode_result_t;
 
 typedef void (*crystalize_assert_handler_t)(const char* file, int line, const char* func, const char* expression, const char* message);
 typedef void* (*crystalize_alloc_handler_t)(size_t size, const char* file, int line, const char* func);
@@ -85,8 +97,8 @@ void crystalize_schema_add(const crystalize_schema_t* schema);
 const crystalize_schema_t* crystalize_schema_get(uint32_t schema_name_id);
 
 // Encodes the given data structure into a buffer using the given schema.
-void crystalize_encode(uint32_t schema_name_id, const void* data, char** buf, uint32_t* buf_size);
-void crystalize_encode_free_buf(char* buf);
+void crystalize_encode(uint32_t schema_name_id, const void* data, crystalize_encode_result_t* result);
+void crystalize_encode_result_free(crystalize_encode_result_t* result);
 
 // Decodes the buffer IN PLACE using the given expected schema.
 void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size);
