@@ -115,17 +115,18 @@ void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_
   // TODO: handle mismatched schemas
   schemas = NULL;
 
+  // get pointer to the root of the data graph
   void* data = decoder.reader.buf + data_offset;
 
-  // TODO: fixup pointers
-  uint32_t* pointer_table = (uint32_t*)(decoder.reader.buf + pointer_table_offset);
+  // fixup pointers
+  const uint32_t* pointer_table = (const uint32_t*)(decoder.reader.buf + pointer_table_offset);
   for (uint32_t index = 0; index < pointer_table_count; ++index) {
     const uint32_t buf_pos = pointer_table[index];
     int64_t* buf_pos_ptr = (int64_t*)(decoder.reader.buf + buf_pos);
-    const int64_t offset = *buf_pos_ptr;
+    const int64_t relative_offset = *buf_pos_ptr;
 
     // add the offset to the buffer pos
-    const int64_t new_ptr_addr = buf_pos + offset;
+    const intptr_t new_ptr_addr = (intptr_t)(decoder.reader.buf + buf_pos + relative_offset);
     *buf_pos_ptr = new_ptr_addr;
   }
 

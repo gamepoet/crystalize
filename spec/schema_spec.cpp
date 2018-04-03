@@ -139,7 +139,7 @@ TEST_CASE("encoding") {
       0x00, 0x00, 0x00, 0x00, // schema version
       0x04, 0x00, 0x00, 0x00, // alignment
       0x02, 0x00, 0x00, 0x00, // schema field count
-      0x08, 0x00, 0x00, 0x00, // schema fields pointer offset (8 bytes)
+      0x08, 0x00, 0x00, 0x00, // schema fields pointer relative offset (8 bytes)
       0x00, 0x00, 0x00, 0x00, // (more pointer)
 
       0x2c, 0x29, 0x0c, 0xe4, // field0: fnv1a("a")
@@ -176,5 +176,41 @@ TEST_CASE("encoding") {
     CHECK(decoded->b[0] == 1);
     CHECK(decoded->b[1] == 2);
     CHECK(decoded->b[2] == 3);
+  }
+
+  SECTION("it encodes a struct with scalar pointers") {
+    struct root_t {
+      char a;
+      int16_t b_count;
+      float* b;
+    };
+    crystalize_schema_t schema;
+    crystalize_schema_field_t fields[3];
+    crystalize_schema_field_init_scalar(fields + 0, "a", CRYSTALIZE_CHAR, 1);
+    crystalize_schema_field_init_scalar(fields + 1, "b_count", CRYSTALIZE_INT16, 1);
+    crystalize_schema_field_init_counted_scalar(fields + 2, "b", CRYSTALIZE_FLOAT, "b_count");
+    crystalize_schema_init(&schema, "root", 0, alignof(root_t), fields, 3);
+    crystalize_schema_add(&schema);
+
+    float values[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    root_t data;
+    data.a = 'a';
+    data.b_count = 4;
+    data.b = values;
+
+    // encode it
+    buf_t buf_result;
+    crystalize_encode(schema.name_id, &data, &buf_result.buf, &buf_result.size);
+    CHECK(buf_result.size != 0);
+
+    // decode it back
+    root_t* decoded = (root_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.size);
+    CHECK(decoded != NULL);
+    CHECK(decoded->a == 'a');
+    CHECK(decoded->b_count == 4);
+    CHECK(decoded->b[0] == 1.0f);
+    CHECK(decoded->b[1] == 2.0f);
+    CHECK(decoded->b[2] == 3.0f);
+    CHECK(decoded->b[3] == 4.0f);
   }
 }

@@ -370,6 +370,20 @@ void crystalize_schema_field_init_scalar(crystalize_schema_field_t* field,
   field->count_field_name_id = 0;
   field->type = type;
 }
+
+void crystalize_schema_field_init_counted_scalar(crystalize_schema_field_t* field,
+                                                 const char* name,
+                                                 crystalize_type_t type,
+                                                 const char* count_field_name)
+{
+  crystalize_assert(field != NULL, "field cannot be null");
+  field->name_id = fnv1a(name, strlen(name));
+  field->struct_name_id = 0;
+  field->count = 0;
+  field->count_field_name_id = fnv1a(count_field_name, strlen(count_field_name));
+  field->type = type;
+}
+
 void crystalize_schema_field_init_counted_struct(crystalize_schema_field_t* field,
                                   const char* name,
                                   const crystalize_schema_t* schema,
