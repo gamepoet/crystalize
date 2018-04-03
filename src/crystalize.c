@@ -9,34 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// typedef struct sda_header_t {
-//   uint32_t capacity;
-//   uint32_t count;
-// } sda_header_t;
-//
-// #define sda__header(a) ((sda_header_t*)((char*)(a) - sizeof(sda_header_t)))
-// #define sda__capacity(a) sda_header(a)->capacity
-// #define sda__count(a) sda__header(a)->count
-//
-// // frees the allocation for the array
-// #define sda_free(a) ((a) ? free(sda__header(a)), 0 : 0)
-//
-// // gets the number of items currently stored in the array
-// #define sda_count(a) ((a) ? sda__count(a) : 0)
-//
-// // gets the max number of items that can be stored in the array without additional allocation
-// #define sda_capacity(a) ((a) ? sda__capacity(a) : 0)
-//
-// // ensures there is enough space to hold N elements, reallocating if necessary
-// #define sda_reserve(a, n) (((a) == 0) || (sda__count(a) + (n) > sda__capacity(a))) ? sda__grow(a, sda)
-//
-// // pushes an item onto the end of the array
-// #define sda_push(a, item) sda__maybe_grow(a, 1), (a)[sda__count(a)++] = (item)
-//
-// tests if the array contains an item
-// #define sda_contains(a, item) \
-//   for (int index = 0; index < )
-
 static int s_schemas_capacity;
 static int s_schemas_count;
 static crystalize_schema_t* s_schemas;
