@@ -55,6 +55,7 @@ static void read_u8(reader_t* reader, uint8_t* val) {
 }
 
 static void read_u32(reader_t* reader, uint32_t* val) {
+  read_align(reader, 4);
   read_bytes(reader, val, 4);
 }
 
@@ -69,6 +70,7 @@ void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_
   uint8_t magic[4];
   uint32_t file_version;
   uint32_t endian;
+  uint8_t pointer_size;
   uint32_t data_offset;
   uint32_t pointer_table_offset;
   uint32_t pointer_table_count;
@@ -79,6 +81,7 @@ void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_
   read_u8(&decoder.reader, magic + 3);
   read_u32(&decoder.reader, &file_version);
   read_u32(&decoder.reader, &endian);
+  read_u8(&decoder.reader, &pointer_size);
   read_u32(&decoder.reader, &data_offset);
   read_u32(&decoder.reader, &pointer_table_offset);
   read_u32(&decoder.reader, &pointer_table_count);
@@ -96,6 +99,10 @@ void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_
   }
   if (endian != 0x01u) {
     printf("endian mismatch\n");
+    return NULL;
+  }
+  if (pointer_size != sizeof(void*)) {
+    printf("pointer size mismatch\n");
     return NULL;
   }
   if (data_offset >= buf_size) {

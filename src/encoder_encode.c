@@ -500,7 +500,9 @@ void encoder_encode(const crystalize_schema_t* schema, const void* data, crystal
   buf_write_u8(&encoder.buf, 0x79);
   buf_write_u8(&encoder.buf, 0x73);
   buf_write_u32(&encoder.buf, CRYSTALIZE_FILE_VERSION);
-  buf_write_u32(&encoder.buf, 1);
+  buf_write_u32(&encoder.buf, 1); // endian
+  buf_write_u8(&encoder.buf, (uint8_t)sizeof(void*));
+  buf_align(&encoder.buf, 4);
   const uint32_t header_data_start_offset = encoder.buf.cur;
   buf_write_u32(&encoder.buf, 0); // offset to the start of the data buffer
   const uint32_t pointer_table_start_offset = encoder.buf.cur;
