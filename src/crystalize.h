@@ -62,10 +62,10 @@ void crystalize_schema_field_init_scalar(crystalize_schema_field_t* field,
                                          const char* name,
                                          crystalize_type_t type,
                                          uint32_t count);
-// void crystalize_schema_field_init_struct(crystalize_schema_field_t* field,
-//                                          const char* name,
-//                                          const crystalize_schema_t* schema,
-//                                          uint32_t count);
+void crystalize_schema_field_init_struct(crystalize_schema_field_t* field,
+                                         const char* name,
+                                         const crystalize_schema_t* schema,
+                                         uint32_t count);
 void crystalize_schema_field_init_counted_scalar(crystalize_schema_field_t* field,
                                                  const char* name,
                                                  crystalize_type_t type,

@@ -371,6 +371,20 @@ void crystalize_schema_field_init_scalar(crystalize_schema_field_t* field,
   field->type = type;
 }
 
+void crystalize_schema_field_init_struct(crystalize_schema_field_t* field,
+                                         const char* name,
+                                         const crystalize_schema_t* schema,
+                                         uint32_t count) {
+  crystalize_assert(field != NULL, "field cannot be null");
+  crystalize_assert(schema != NULL, "schema cannot be null");
+  crystalize_assert(count > 0, "cannot have zero count");
+  field->name_id = fnv1a(name, strlen(name));
+  field->struct_name_id = schema->name_id;
+  field->count = count;
+  field->count_field_name_id = 0;
+  field->type = CRYSTALIZE_STRUCT;
+}
+
 void crystalize_schema_field_init_counted_scalar(crystalize_schema_field_t* field,
                                                  const char* name,
                                                  crystalize_type_t type,

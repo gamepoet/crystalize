@@ -213,4 +213,48 @@ TEST_CASE("encoding") {
     CHECK(decoded->b[2] == 3.0f);
     CHECK(decoded->b[3] == 4.0f);
   }
+
+  SECTION("it encodes a struct field") {
+    struct inner_t {
+      uint32_t a;
+      uint8_t b;
+    };
+    struct root_t {
+      int8_t a;
+      inner_t b;
+      uint32_t c;
+    };
+    crystalize_schema_t schema_inner;
+    crystalize_schema_field_t schema_inner_fields[2];
+    crystalize_schema_field_init_scalar(schema_inner_fields + 0, "a", CRYSTALIZE_UINT32, 1);
+    crystalize_schema_field_init_scalar(schema_inner_fields + 1, "b", CRYSTALIZE_UINT8, 1);
+    crystalize_schema_init(&schema_inner, "inner", 0, alignof(inner_t), schema_inner_fields, 2);
+    crystalize_schema_add(&schema_inner);
+    crystalize_schema_t schema_root;
+    crystalize_schema_field_t schema_root_fields[3];
+    crystalize_schema_field_init_scalar(schema_root_fields + 0, "a", CRYSTALIZE_INT8, 1);
+    crystalize_schema_field_init_struct(schema_root_fields + 1, "b", &schema_inner, 1);
+    crystalize_schema_field_init_scalar(schema_root_fields + 2, "c", CRYSTALIZE_UINT32, 1);
+    crystalize_schema_init(&schema_root, "root", 0, alignof(root_t), schema_root_fields, 3);
+    crystalize_schema_add(&schema_root);
+
+    root_t data;
+    data.a = 100;
+    data.b.a = 101;
+    data.b.b = 255;
+    data.c = 0x12345678;
+
+    // encode it
+    buf_t buf_result;
+    crystalize_encode(schema_root.name_id, &data, &buf_result.buf, &buf_result.size);
+    CHECK(buf_result.size != 0);
+
+    // decode it back
+    root_t* decoded = (root_t*)crystalize_decode(schema_root.name_id, buf_result.buf, buf_result.size);
+    CHECK(decoded != NULL);
+    CHECK(decoded->a == 100);
+    CHECK(decoded->b.a == 101);
+    CHECK(decoded->b.b == 255);
+    CHECK(decoded->c == 0x12345678);
+  }
 }
