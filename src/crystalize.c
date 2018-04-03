@@ -461,6 +461,10 @@ void crystalize_encode(uint32_t schema_name_id, const void* data, char** buf, ui
   encoder_encode(schema, data, buf, buf_size);
 }
 
+void crystalize_encode_free_buf(char* buf) {
+  crystalize_free(buf);
+}
+
 void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size) {
   const int schema_index = schema_find(schema_name_id);
   crystalize_assert(schema_index != -1, "schema not found");
