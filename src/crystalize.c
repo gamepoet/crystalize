@@ -95,7 +95,10 @@ void crystalize_init(const crystalize_config_t* config) {
 }
 
 void crystalize_shutdown() {
-  free(s_schemas);
+  for (int index = 0; index < s_schemas_count; ++index) {
+    crystalize_free((void*)s_schemas[index].fields);
+  }
+  crystalize_free(s_schemas);
   s_schemas = NULL;
   s_schemas_count = 0;
   s_schemas_capacity = 0;
@@ -174,10 +177,19 @@ void crystalize_schema_init(crystalize_schema_t* schema,
   schema->field_count = field_count;
 }
 
-void crystalize_schema_add(const crystalize_schema_t* schema) {
-  crystalize_assert(-1 == schema_find(schema->name_id), "schema is already registered");
-  crystalize_assert(schema->field_count > 0, "schema cannot represent an empty struct");
+crystalize_error_t crystalize_schema_add(const crystalize_schema_t* schema) {
+  crystalize_assert(schema != NULL, "schema cannot be NULL");
   crystalize_assert(schema->fields != NULL, "schema fields cannot be NULL");
+
+  // empty structs are not supported
+  if (schema->field_count == 0) {
+    return CRYSTALIZE_ERROR_SCHEMA_IS_EMPTY;
+  }
+  // check if the schema is already registered
+  if (-1 != schema_find(schema->name_id)) {
+    return CRYSTALIZE_ERROR_SCHEMA_ALREADY_ADDED;
+  }
+
   // verify all the fields have unique names
   for (uint32_t field_index = 0; field_index < schema->field_count - 1; ++field_index) {
     for (uint32_t other_index = field_index + 1; other_index < schema->field_count; ++other_index) {
@@ -185,12 +197,65 @@ void crystalize_schema_add(const crystalize_schema_t* schema) {
     }
   }
 
+  // verify field schema references exist
+  for (uint32_t field_index = 0; field_index < schema->field_count; ++field_index) {
+    const crystalize_schema_field_t* field = schema->fields + field_index;
+    if (field->struct_name_id != 0) {
+      if (-1 == schema_find(field->struct_name_id)) {
+        return CRYSTALIZE_ERROR_SCHEMA_NOT_FOUND;
+      }
+    }
+  }
+
+  // verify referenced count fields exist
+  for (uint32_t field_index = 0; field_index < schema->field_count; ++field_index) {
+    const crystalize_schema_field_t* field = schema->fields + field_index;
+    // can't refer to self
+    if (field->count_field_name_id == field->name_id) {
+      return CRYSTALIZE_ERROR_SCHEMA_COUNT_FIELD_NOT_FOUND;
+    }
+    const crystalize_schema_field_t* count_field = NULL;
+    if (field->count_field_name_id != 0) {
+      for (uint32_t other_index = 0; other_index < schema->field_count; ++other_index) {
+        const crystalize_schema_field_t* other_field = schema->fields + other_index;
+        if (field->count_field_name_id == other_field->name_id) {
+          count_field = other_field;
+          break;
+        }
+      }
+      if (count_field == NULL) {
+        return CRYSTALIZE_ERROR_SCHEMA_COUNT_FIELD_NOT_FOUND;
+      }
+      switch (count_field->type) {
+        case CRYSTALIZE_INT8:
+        case CRYSTALIZE_INT16:
+        case CRYSTALIZE_INT32:
+        case CRYSTALIZE_UINT8:
+        case CRYSTALIZE_UINT16:
+        case CRYSTALIZE_UINT32:
+          // fine
+          break;
+        default:
+          return CRYSTALIZE_ERROR_SCHEMA_COUNT_FIELD_INVALID_TYPE;
+      }
+    }
+  }
+
+  // alloc a new set of schema fields
+  crystalize_schema_field_t* fields_copy = (crystalize_schema_field_t*)crystalize_alloc(schema->field_count * sizeof(crystalize_schema_field_t));
+  for (uint32_t field_index = 0; field_index < schema->field_count; ++field_index) {
+    *(fields_copy + field_index) = *(schema->fields + field_index);
+  }
+
   if (s_schemas_count >= s_schemas_capacity) {
     s_schemas_capacity += 128;
-    s_schemas = (crystalize_schema_t*)realloc(s_schemas, s_schemas_capacity * sizeof(crystalize_schema_t));
+    s_schemas = (crystalize_schema_t*)crystalize_realloc(s_schemas, s_schemas_capacity * sizeof(crystalize_schema_t*));
   }
   s_schemas[s_schemas_count] = *schema;
+  s_schemas[s_schemas_count].fields = fields_copy;
   ++s_schemas_count;
+
+  return CRYSTALIZE_ERROR_NONE;
 }
 
 const crystalize_schema_t* crystalize_schema_get(uint32_t schema_name_id) {
