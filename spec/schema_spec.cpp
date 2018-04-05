@@ -163,7 +163,9 @@ TEST_CASE("encoding") {
     CHECK(buf_result == buf_expected);
 
     // decode it back
-    simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.buf_size);
+    crystalize_decode_result_t decode_result;
+    simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.buf_size, &decode_result);
+    CHECK(decode_result.error == CRYSTALIZE_ERROR_NONE);
     CHECK(decoded != NULL);
     CHECK(decoded->a == true);
     CHECK(decoded->b[0] == 1);
@@ -199,7 +201,9 @@ TEST_CASE("encoding") {
     CHECK(buf_result.error == CRYSTALIZE_ERROR_NONE);
 
     // decode it back
-    root_t* decoded = (root_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.buf_size);
+    crystalize_decode_result_t decode_result;
+    root_t* decoded = (root_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.buf_size, &decode_result);
+    CHECK(decode_result.error == CRYSTALIZE_ERROR_NONE);
     CHECK(decoded != NULL);
     CHECK(decoded->a == 'a');
     CHECK(decoded->b_count == 4);
@@ -247,7 +251,9 @@ TEST_CASE("encoding") {
     CHECK(buf_result.error == CRYSTALIZE_ERROR_NONE);
 
     // decode it back
-    root_t* decoded = (root_t*)crystalize_decode(schema_root.name_id, buf_result.buf, buf_result.buf_size);
+    crystalize_decode_result_t decode_result;
+    root_t* decoded = (root_t*)crystalize_decode(schema_root.name_id, buf_result.buf, buf_result.buf_size, &decode_result);
+    CHECK(decode_result.error == CRYSTALIZE_ERROR_NONE);
     CHECK(decoded != NULL);
     CHECK(decoded->a == 100);
     CHECK(decoded->b.a == 101);

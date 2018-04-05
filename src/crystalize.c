@@ -267,10 +267,11 @@ void crystalize_encode_result_free(crystalize_encode_result_t* result) {
   result->error = CRYSTALIZE_ERROR_NONE;
 }
 
-void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size) {
+void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size, crystalize_decode_result_t* result) {
   const int schema_index = schema_find(schema_name_id);
   crystalize_assert(schema_index != -1, "schema not found");
   const crystalize_schema_t* schema = s_schemas + schema_index;
 
-  return encoder_decode(schema, buf, buf_size);
+  result->error = CRYSTALIZE_ERROR_NONE;
+  return encoder_decode(schema, buf, buf_size, result);
 }

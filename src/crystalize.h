@@ -30,6 +30,13 @@ typedef enum crystalize_error_t {
   CRYSTALIZE_ERROR_SCHEMA_COUNT_FIELD_NOT_FOUND,
   CRYSTALIZE_ERROR_SCHEMA_IS_EMPTY,
   CRYSTALIZE_ERROR_SCHEMA_NOT_FOUND,
+  CRYSTALIZE_ERROR_UNEXPECTED_EOF,
+  CRYSTALIZE_ERROR_FILE_HEADER_MALFORMED,
+  CRYSTALIZE_ERROR_FILE_VERSION_MISMATCH,
+  CRYSTALIZE_ERROR_ENDIAN_MISMATCH,
+  CRYSTALIZE_ERROR_POINTER_SIZE_MISMATCH,
+  CRYSTALIZE_ERROR_DATA_OFFSET_IS_INVALID,
+  CRYSTALIZE_ERROR_POINTER_TABLE_OFFSET_IS_INVALID,
 } crystalize_error_t;
 
 typedef struct crystalize_schema_field_t {
@@ -54,6 +61,10 @@ typedef struct crystalize_encode_result_t {
   crystalize_error_t error;
   char* error_message;
 } crystalize_encode_result_t;
+
+typedef struct crystalize_decode_result_t {
+  crystalize_error_t error;
+} crystalize_decode_result_t;
 
 typedef void (*crystalize_assert_handler_t)(const char* file, int line, const char* func, const char* expression, const char* message);
 typedef void* (*crystalize_alloc_handler_t)(size_t size, const char* file, int line, const char* func);
@@ -105,7 +116,7 @@ void crystalize_encode(uint32_t schema_name_id, const void* data, crystalize_enc
 void crystalize_encode_result_free(crystalize_encode_result_t* result);
 
 // Decodes the buffer IN PLACE using the given expected schema.
-void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size);
+void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size, crystalize_decode_result_t* result);
 
 #ifdef __cplusplus
 }

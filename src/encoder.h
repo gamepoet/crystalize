@@ -5,6 +5,7 @@
 
 typedef struct crystalize_schema_t crystalize_schema_t;
 typedef struct crystalize_encode_result_t crystalize_encode_result_t;
+typedef struct crystalize_decode_result_t crystalize_decode_result_t;
 
 void encoder_encode(const crystalize_schema_t* schema, const void* data, crystalize_encode_result_t* result);
-void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_size);
+void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_size, crystalize_decode_result_t* result);

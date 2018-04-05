@@ -2,7 +2,6 @@
 #include "encoder.h"
 #include <stdalign.h>
 #include <string.h>
-#include <stdio.h>
 
 typedef struct reader_t {
   char* buf;
@@ -59,7 +58,7 @@ static void read_u32(reader_t* reader, uint32_t* val) {
   read_bytes(reader, val, 4);
 }
 
-void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_size) {
+void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_size, crystalize_decode_result_t* result) {
   decoder_t decoder = {{0}};
   decoder.reader.buf = buf;
   decoder.reader.size = buf_size;
@@ -87,27 +86,37 @@ void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_
   read_u32(&decoder.reader, &pointer_table_count);
   read_u32(&decoder.reader, &schema_count);
   if (decoder.reader.error) {
+    result->error = CRYSTALIZE_ERROR_UNEXPECTED_EOF;
     return NULL;
   }
   if (magic[0] != 0x63 || magic[1] != 0x72 || magic[2] != 0x79 || magic[3] != 0x73) {
-    printf("magic mismatch\n");
+    result->error = CRYSTALIZE_ERROR_FILE_HEADER_MALFORMED;
     return NULL;
   }
   if (file_version != CRYSTALIZE_FILE_VERSION) {
-    printf("file_version mismatch\n");
+    result->error = CRYSTALIZE_ERROR_FILE_VERSION_MISMATCH;
     return NULL;
   }
   if (endian != 0x01u) {
-    printf("endian mismatch\n");
+    result->error = CRYSTALIZE_ERROR_ENDIAN_MISMATCH;
     return NULL;
   }
   if (pointer_size != sizeof(void*)) {
-    printf("pointer size mismatch\n");
+    result->error = CRYSTALIZE_ERROR_POINTER_SIZE_MISMATCH;
     return NULL;
   }
   if (data_offset >= buf_size) {
     // offset to data start is invalid
-    printf("data offset mismatch\n");
+    result->error = CRYSTALIZE_ERROR_DATA_OFFSET_IS_INVALID;
+    return NULL;
+  }
+  if (pointer_table_offset >= buf_size) {
+    // offset to the pointer tabel is invalid
+    result->error = CRYSTALIZE_ERROR_POINTER_TABLE_OFFSET_IS_INVALID;
+    return NULL;
+  }
+  if (pointer_table_offset + (pointer_table_count * sizeof(uint32_t)) > buf_size) {
+    result->error = CRYSTALIZE_ERROR_UNEXPECTED_EOF;
     return NULL;
   }
 
@@ -116,6 +125,7 @@ void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_
   const crystalize_schema_t* schemas = (const crystalize_schema_t*)read_pos(&decoder.reader);
   read_consume(&decoder.reader, schema_count * sizeof(crystalize_schema_t));
   if (decoder.reader.error) {
+    result->error = CRYSTALIZE_ERROR_UNEXPECTED_EOF;
     return NULL;
   }
 
