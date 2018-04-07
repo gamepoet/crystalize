@@ -12,6 +12,8 @@ set(
   src/crystalize.h
   src/hash.c
   src/hash.h
+  src/writer.c
+  src/writer.h
 )
 
 # TODO: max out the warning settings for the compilers (why isn't there a generic way to do this?)
