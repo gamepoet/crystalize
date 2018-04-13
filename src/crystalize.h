@@ -43,6 +43,7 @@ typedef enum crystalize_error_t {
 typedef struct crystalize_schema_field_t {
   uint32_t name_id;             // hash(name) of this field
   uint32_t struct_name_id;      // the hash(name) for the struct (if type is struct)
+  uint32_t struct_version;      // the version for the struct (if type is struct)
   uint32_t count;               // the fixed-size array length (zero implies pointer, >1 implies array)
   uint32_t count_field_name_id; // the index of the field in the same struct that provides a count (if pointer)
   uint8_t type;                 // the field's basic type (crystalize_type_t)
@@ -110,14 +111,14 @@ void crystalize_schema_init(crystalize_schema_t* schema,
                             uint32_t field_count);
 
 crystalize_error_t crystalize_schema_add(const crystalize_schema_t* schema);
-const crystalize_schema_t* crystalize_schema_get(uint32_t schema_name_id);
+const crystalize_schema_t* crystalize_schema_get(uint32_t schema_name_id, uint32_t schema_version);
 
 // Encodes the given data structure into a buffer using the given schema.
-void crystalize_encode(uint32_t schema_name_id, const void* data, crystalize_encode_result_t* result);
+void crystalize_encode(uint32_t schema_name_id, uint32_t schema_version, const void* data, crystalize_encode_result_t* result);
 void crystalize_encode_result_free(crystalize_encode_result_t* result);
 
 // Decodes the buffer IN PLACE using the given expected schema.
-void* crystalize_decode(uint32_t schema_name_id, char* buf, uint32_t buf_size, crystalize_decode_result_t* result);
+void* crystalize_decode(uint32_t schema_name_id, uint32_t schema_version, char* buf, uint32_t buf_size, crystalize_decode_result_t* result);
 
 #ifdef __cplusplus
 }

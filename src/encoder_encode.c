@@ -247,22 +247,24 @@ gather_schemas_impl(crystalize_encode_result_t* result, schema_list_t* schemas, 
   for (uint32_t index = 0; index < schema->field_count; ++index) {
     const crystalize_schema_field_t* field = schema->fields + index;
     if (field->type == CRYSTALIZE_STRUCT) {
-      const crystalize_schema_t* field_schema = crystalize_schema_get(field->struct_name_id);
+      const crystalize_schema_t* field_schema = crystalize_schema_get(field->struct_name_id, field->struct_version);
       if (field_schema == NULL) {
         int err_msg_len = snprintf(
             NULL,
             0,
-            "field has unknown schema. schema_name_id=%08x field_name_id=%08x field_struct_schema_name_id=%08x",
+            "field has unknown schema. schema_name_id=%08x field_name_id=%08x field_struct_schema_name_id=%08x field_struct_schema_version=%08x",
             schema->name_id,
             field->name_id,
-            field->struct_name_id);
+            field->struct_name_id,
+            field->struct_version);
         char* err_msg = (char*)crystalize_alloc(err_msg_len + 1);
         snprintf(err_msg,
                  err_msg_len + 1,
-                 "field has unknown schema. schema_name_id=%08x field_name_id=%08x field_struct_schema_name_id=%08x",
+                 "field has unknown schema. schema_name_id=%08x field_name_id=%08x field_struct_schema_name_id=%08x field_struct_schema_version=%08x",
                  schema->name_id,
                  field->name_id,
-                 field->struct_name_id);
+                 field->struct_name_id,
+                 field->struct_version);
         result->error = CRYSTALIZE_ERROR_SCHEMA_NOT_FOUND;
         result->error_message = err_msg;
         return;
@@ -400,7 +402,7 @@ static const char* write_struct(encoder_t* encoder, const crystalize_schema_t* s
           target_count = field_get_value_as_uint32(count_field, data_field);
         }
         write_queue_push(
-            &encoder->todo_list, field->type, crystalize_schema_get(field->struct_name_id), target_count, ptr_value);
+            &encoder->todo_list, field->type, crystalize_schema_get(field->struct_name_id, field->struct_version), target_count, ptr_value);
       }
     }
     else {
@@ -418,7 +420,7 @@ static const char* write_struct(encoder_t* encoder, const crystalize_schema_t* s
       }
       else {
         // recurse here
-        const crystalize_schema_t* field_schema = crystalize_schema_get(field->struct_name_id);
+        const crystalize_schema_t* field_schema = crystalize_schema_get(field->struct_name_id, field->struct_version);
         crystalize_assert(field_schema != NULL, "failed to find field schema");
 
         // NOTE: write_struct() will do the alignment

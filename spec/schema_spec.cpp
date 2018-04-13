@@ -68,14 +68,14 @@ TEST_CASE("schema registration") {
   init_t init(nullptr);
 
   SECTION("it properly fails to find schemas that don't exist") {
-    CHECK(crystalize_schema_get(0) == NULL);
+    CHECK(crystalize_schema_get(0, 0) == NULL);
   }
 
   // SECTION("it disallows an empty schema") {
   //   crystalize_schema_t schema_empty;
   //   crystalize_schema_init(&schema_empty, "empty", 0, NULL, 0);
   //   crystalize_schema_add(&schema_empty);
-  //   CHECK(crystalize_schema_get(schema_empty.name_id) != NULL);
+  //   CHECK(crystalize_schema_get(schema_empty.name_id, 0) != NULL);
   // }
 
   SECTION("it allows a schema with fields") {
@@ -86,7 +86,7 @@ TEST_CASE("schema registration") {
     crystalize_schema_init(&schema, "simple", 0, 4, fields, 2);
 
     crystalize_schema_add(&schema);
-    const crystalize_schema_t* found = crystalize_schema_get(schema.name_id);
+    const crystalize_schema_t* found = crystalize_schema_get(schema.name_id, 0);
     CHECK(found != NULL);
     CHECK(found->field_count == 2);
     CHECK(found->fields[0].type == CRYSTALIZE_BOOL);
@@ -123,8 +123,8 @@ TEST_CASE("encoding") {
         0x00, 0x00, 0x00, 0x00, // encoding version
         0x01, 0x00, 0x00, 0x00, // endian
         0x08, 0x00, 0x00, 0x00, // pointer size + pad
-        0x60, 0x00, 0x00, 0x00, // offset to the data section from the start of the file
-        0x70, 0x00, 0x00, 0x00, // offset to the pointer fixup table
+        0x68, 0x00, 0x00, 0x00, // offset to the data section from the start of the file
+        0x78, 0x00, 0x00, 0x00, // offset to the pointer fixup table
         0x01, 0x00, 0x00, 0x00, // pointer fixup count
         0x01, 0x00, 0x00, 0x00, // schema count
 
@@ -137,12 +137,14 @@ TEST_CASE("encoding") {
 
         0x2c, 0x29, 0x0c, 0xe4, // field0: fnv1a("a")
         0x00, 0x00, 0x00, 0x00, // field0: struct_name_id
+        0x00, 0x00, 0x00, 0x00, // field0: struct_version
         0x01, 0x00, 0x00, 0x00, // field0: count
         0x00, 0x00, 0x00, 0x00, // field0: count_field_name_id
         0x00, 0x00, 0x00, 0x00, // field1: type(bool) + pad
 
         0xe5, 0x2d, 0x0c, 0xe7, // field1: fnv1a("b")
         0x00, 0x00, 0x00, 0x00, // field0: struct_name_id
+        0x00, 0x00, 0x00, 0x00, // filed0: struct_version
         0x03, 0x00, 0x00, 0x00, // field1: count
         0x00, 0x00, 0x00, 0x00, // field0: count_field_name_id
         0x04, 0x00, 0x00, 0x00, // field1: type(int32) + pad
@@ -159,12 +161,12 @@ TEST_CASE("encoding") {
     buf_expected.buf_size = sizeof(expected);
 
     crystalize_encode_result_t buf_result;
-    crystalize_encode(schema.name_id, &data, &buf_result);
+    crystalize_encode(schema.name_id, schema.version, &data, &buf_result);
     CHECK(buf_result == buf_expected);
 
     // decode it back
     crystalize_decode_result_t decode_result;
-    simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.buf_size, &decode_result);
+    simple_t* decoded = (simple_t*)crystalize_decode(schema.name_id, schema.version, buf_result.buf, buf_result.buf_size, &decode_result);
     CHECK(decode_result.error == CRYSTALIZE_ERROR_NONE);
     CHECK(decoded != NULL);
     CHECK(decoded->a == true);
@@ -197,12 +199,12 @@ TEST_CASE("encoding") {
 
     // encode it
     crystalize_encode_result_t buf_result;
-    crystalize_encode(schema.name_id, &data, &buf_result);
+    crystalize_encode(schema.name_id, schema.version, &data, &buf_result);
     CHECK(buf_result.error == CRYSTALIZE_ERROR_NONE);
 
     // decode it back
     crystalize_decode_result_t decode_result;
-    root_t* decoded = (root_t*)crystalize_decode(schema.name_id, buf_result.buf, buf_result.buf_size, &decode_result);
+    root_t* decoded = (root_t*)crystalize_decode(schema.name_id, schema.version, buf_result.buf, buf_result.buf_size, &decode_result);
     CHECK(decode_result.error == CRYSTALIZE_ERROR_NONE);
     CHECK(decoded != NULL);
     CHECK(decoded->a == 'a');
@@ -247,12 +249,12 @@ TEST_CASE("encoding") {
 
     // encode it
     crystalize_encode_result_t buf_result;
-    crystalize_encode(schema_root.name_id, &data, &buf_result);
+    crystalize_encode(schema_root.name_id, schema_root.version, &data, &buf_result);
     CHECK(buf_result.error == CRYSTALIZE_ERROR_NONE);
 
     // decode it back
     crystalize_decode_result_t decode_result;
-    root_t* decoded = (root_t*)crystalize_decode(schema_root.name_id, buf_result.buf, buf_result.buf_size, &decode_result);
+    root_t* decoded = (root_t*)crystalize_decode(schema_root.name_id, schema_root.version, buf_result.buf, buf_result.buf_size, &decode_result);
     CHECK(decode_result.error == CRYSTALIZE_ERROR_NONE);
     CHECK(decoded != NULL);
     CHECK(decoded->a == 100);
