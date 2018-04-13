@@ -137,13 +137,29 @@ void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_
 
   // fixup pointers
   const uint32_t* pointer_table = (const uint32_t*)(decoder.reader.buf + pointer_table_offset);
+  if ((const char*)pointer_table >= decoder.reader.buf + decoder.reader.size) {
+    result->error = CRYSTALIZE_ERROR_UNEXPECTED_EOF;
+    return NULL;
+  }
   for (uint32_t index = 0; index < pointer_table_count; ++index) {
     const uint32_t buf_pos = pointer_table[index];
+    if (buf_pos >= decoder.reader.size) {
+      result->error = CRYSTALIZE_ERROR_POINTER_INVALID;
+      return NULL;
+    }
     int64_t* buf_pos_ptr = (int64_t*)(decoder.reader.buf + buf_pos);
     const int64_t relative_offset = *buf_pos_ptr;
 
     // add the offset to the buffer pos
     const intptr_t new_ptr_addr = (intptr_t)(decoder.reader.buf + buf_pos + relative_offset);
+    if ((const char*)new_ptr_addr < decoder.reader.buf) {
+      result->error = CRYSTALIZE_ERROR_POINTER_INVALID;
+      return NULL;
+    }
+    if ((const char*)new_ptr_addr >= decoder.reader.buf + decoder.reader.size) {
+      result->error = CRYSTALIZE_ERROR_POINTER_INVALID;
+      return NULL;
+    }
     *buf_pos_ptr = new_ptr_addr;
   }
 
