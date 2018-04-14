@@ -59,7 +59,7 @@ static void read_u32(reader_t* reader, uint32_t* val) {
 }
 
 void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_size, crystalize_decode_result_t* result) {
-  decoder_t decoder = {{0}};
+  decoder_t decoder = {0};
   decoder.reader.buf = buf;
   decoder.reader.size = buf_size;
   decoder.reader.cur = 0;

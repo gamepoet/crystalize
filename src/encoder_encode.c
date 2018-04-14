@@ -385,7 +385,7 @@ static const char* write_struct(encoder_t* encoder, const crystalize_schema_t* s
           // lookup the field containing the count
           const crystalize_schema_field_t* count_field = NULL;
           const char* data_field = data_start;
-          for (int index = 0; index < schema->field_count; ++index) {
+          for (uint32_t index = 0; index < schema->field_count; ++index) {
             data_field = ALIGN_PTR(const char, data_field, field_get_alignment(schema->fields + index));
             if (schema->fields[index].name_id == field->count_field_name_id) {
               count_field = schema->fields + index;
@@ -456,7 +456,7 @@ static void encoder_run(encoder_t* encoder) {
 }
 
 void encoder_encode(const crystalize_schema_t* schema, const void* data, crystalize_encode_result_t* result) {
-  encoder_t encoder = {{0}};
+  encoder_t encoder = {0};
 
   // gather up and count up all the unique schemas
   schema_list_t schemas = {0};
