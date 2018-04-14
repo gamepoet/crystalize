@@ -227,8 +227,7 @@ static int schema_compare(const void* a, const void* b) {
   }
 }
 
-static void
-gather_schemas_impl(crystalize_encode_result_t* result, schema_list_t* schemas, const crystalize_schema_t* schema) {
+static void gather_schemas_impl(crystalize_encode_result_t* result, schema_list_t* schemas, const crystalize_schema_t* schema) {
   // check if the schema is already in the list
   for (int index = 0; index < schemas->count; ++index) {
     if (schema->name_id == schemas->entries[index].name_id) {
@@ -274,8 +273,7 @@ gather_schemas_impl(crystalize_encode_result_t* result, schema_list_t* schemas, 
   }
 }
 
-static void
-gather_schemas(crystalize_encode_result_t* result, schema_list_t* schemas, const crystalize_schema_t* schema) {
+static void gather_schemas(crystalize_encode_result_t* result, schema_list_t* schemas, const crystalize_schema_t* schema) {
   gather_schemas_impl(result, schemas, schema);
   if (result->error != CRYSTALIZE_ERROR_NONE) {
     qsort(schemas->entries, schemas->count, sizeof(crystalize_schema_t), &schema_compare);

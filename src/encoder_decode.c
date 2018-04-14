@@ -1,7 +1,7 @@
-#include "crystalize.h"
-#include "encoder.h"
 #include <stdalign.h>
 #include <string.h>
+#include "crystalize.h"
+#include "encoder.h"
 
 typedef struct reader_t {
   char* buf;

@@ -1,8 +1,8 @@
-#include "config.h"
-#include "crystalize.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "config.h"
+#include "crystalize.h"
 
 static crystalize_config_t s_config;
 

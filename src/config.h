@@ -6,8 +6,7 @@ typedef struct crystalize_config_t crystalize_config_t;
 
 crystalize_config_t* config_get();
 
-#define crystalize_assert(expr, message)                                                                               \
-  ((expr) ? true : (crystalize_assert_ex(__FILE__, __LINE__, __func__, #expr, message), false))
+#define crystalize_assert(expr, message) ((expr) ? true : (crystalize_assert_ex(__FILE__, __LINE__, __func__, #expr, message), false))
 
 void crystalize_assert_ex(const char* file, int line, const char* func, const char* expression, const char* message);
 

@@ -1,13 +1,13 @@
-#include "crystalize.h"
-#include "config.h"
-#include "encoder.h"
-#include "hash.h"
 #include <assert.h>
 #include <stdalign.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "crystalize.h"
+#include "config.h"
+#include "encoder.h"
+#include "hash.h"
 
 // typedef struct schema_table_entry_t {
 //   uint32_t name_id;
@@ -23,7 +23,7 @@ static int s_schemas_capacity;
 static int s_schemas_count;
 static crystalize_schema_t* s_schemas;
 
-crystalize_schema_t s_schema_schema;       // the schema for crystalize_schema_t
+crystalize_schema_t s_schema_schema;              // the schema for crystalize_schema_t
 static crystalize_schema_t s_schema_schema_field; // the schema for crystalize_schema_field_t
 static crystalize_schema_field_t s_schema_schema_fields[5];
 static crystalize_schema_field_t s_schema_schema_field_fields[6];
@@ -91,9 +91,9 @@ void crystalize_shutdown() {
 }
 
 void crystalize_schema_field_init_scalar(crystalize_schema_field_t* field,
-                                  const char* name,
-                                  crystalize_type_t type,
-                                  uint32_t count) {
+                                         const char* name,
+                                         crystalize_type_t type,
+                                         uint32_t count) {
   crystalize_assert(field != NULL, "field cannot be null");
   crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(count > 0, "cannot have zero count");
@@ -124,8 +124,7 @@ void crystalize_schema_field_init_struct(crystalize_schema_field_t* field,
 void crystalize_schema_field_init_counted_scalar(crystalize_schema_field_t* field,
                                                  const char* name,
                                                  crystalize_type_t type,
-                                                 const char* count_field_name)
-{
+                                                 const char* count_field_name) {
   crystalize_assert(field != NULL, "field cannot be null");
   crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(count_field_name != NULL, "count_field_name cannot be null");
@@ -138,9 +137,9 @@ void crystalize_schema_field_init_counted_scalar(crystalize_schema_field_t* fiel
 }
 
 void crystalize_schema_field_init_counted_struct(crystalize_schema_field_t* field,
-                                  const char* name,
-                                  const crystalize_schema_t* schema,
-                                  const char* count_field_name) {
+                                                 const char* name,
+                                                 const crystalize_schema_t* schema,
+                                                 const char* count_field_name) {
   crystalize_assert(field != NULL, "field cannot be null");
   crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(schema != NULL, "schema cannot be null");
