@@ -129,6 +129,8 @@ void* encoder_decode(const crystalize_schema_t* schema, char* buf, uint32_t buf_
     return NULL;
   }
 
+  // TODO: check the pointers in the schema table
+
   // TODO: handle mismatched schemas
   schemas = NULL;
 
