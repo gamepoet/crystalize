@@ -62,8 +62,7 @@ static void array_free(void* entries_ptr, int* count_ptr, int* capacity_ptr) {
   *capacity_ptr = 0;
 }
 
-static void
-array_grow_if_needed(void* entries_ptr, int* count_ptr, int* capacity_ptr, int element_size, int growth_step) {
+static void array_grow_if_needed(void* entries_ptr, int* count_ptr, int* capacity_ptr, int element_size, int growth_step) {
   void* entries = *(void**)entries_ptr;
   int count = *count_ptr;
   int capacity = *capacity_ptr;
@@ -75,8 +74,7 @@ array_grow_if_needed(void* entries_ptr, int* count_ptr, int* capacity_ptr, int e
   }
 }
 
-static void write_queue_push(
-    write_queue_t* queue, crystalize_type_t type, const crystalize_schema_t* schema, uint32_t count, const void* data) {
+static void write_queue_push(write_queue_t* queue, crystalize_type_t type, const crystalize_schema_t* schema, uint32_t count, const void* data) {
   array_grow_if_needed(&queue->entries, &queue->count, &queue->capacity, sizeof(write_queue_entry_t), 128);
   write_queue_entry_t* entry = queue->entries + queue->count;
   entry->type = type;
