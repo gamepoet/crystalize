@@ -391,14 +391,12 @@ static const char* write_struct(encoder_t* encoder, const crystalize_schema_t* s
             }
             data_field += field_get_size(schema->fields + index);
           }
-          crystalize_assert(count_field != NULL,
-                            "internal error: failed to find the referenced count field for a counted pointer");
+          crystalize_assert(count_field != NULL, "internal error: failed to find the referenced count field for a counted pointer");
 
           // extract the count
           target_count = field_get_value_as_uint32(count_field, data_field);
         }
-        write_queue_push(
-            &encoder->todo_list, field->type, crystalize_schema_get(field->struct_name_id, field->struct_version), target_count, ptr_value);
+        write_queue_push(&encoder->todo_list, field->type, crystalize_schema_get(field->struct_name_id, field->struct_version), target_count, ptr_value);
       }
     }
     else {
