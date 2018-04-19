@@ -41,6 +41,8 @@ typedef enum crystalize_error_t {
 } crystalize_error_t;
 
 typedef struct crystalize_schema_field_t {
+  const char* name;             // the name of this field
+  uint32_t name_size;           // byte size of the name (including null terminator)
   uint32_t name_id;             // hash(name) of this field
   uint32_t struct_name_id;      // the hash(name) for the struct (if type is struct)
   uint32_t struct_version;      // the version for the struct (if type is struct)
@@ -50,11 +52,13 @@ typedef struct crystalize_schema_field_t {
 } crystalize_schema_field_t;
 
 typedef struct crystalize_schema_t {
-  uint32_t name_id;
-  uint32_t version;
-  uint32_t alignment;
-  uint32_t field_count;
-  const crystalize_schema_field_t* fields;
+  const char* name;                        // the name of this field
+  const crystalize_schema_field_t* fields; // the fields that make up this struct
+  uint32_t name_size;                      // byte size of the name (including null terminator)
+  uint32_t field_count;                    // the number of fields that make up this struct
+  uint32_t name_id;                        // hash(name) of this field
+  uint32_t version;                        // the version of the struct
+  uint32_t alignment;                      // alignment of this struct
 } crystalize_schema_t;
 
 typedef struct crystalize_encode_result_t {

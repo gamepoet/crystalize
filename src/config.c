@@ -48,3 +48,10 @@ void* default_alloc_handler(size_t size, const char* file, int line, const char*
 void default_free_handler(void* ptr, const char* file, int line, const char* func) {
   free(ptr);
 }
+
+char* crystalize_strdup(const char* str) {
+  size_t len = strlen(str);
+  char* buf = (char*)crystalize_alloc(len + 1);
+  memmove(buf, str, len + 1);
+  return buf;
+}

@@ -25,8 +25,8 @@ static crystalize_schema_t* s_schemas;
 
 crystalize_schema_t s_schema_schema;              // the schema for crystalize_schema_t
 static crystalize_schema_t s_schema_schema_field; // the schema for crystalize_schema_field_t
-static crystalize_schema_field_t s_schema_schema_fields[5];
-static crystalize_schema_field_t s_schema_schema_field_fields[6];
+static crystalize_schema_field_t s_schema_schema_fields[7];
+static crystalize_schema_field_t s_schema_schema_field_fields[8];
 
 static int schema_find(uint32_t name_id, uint32_t version) {
   for (int index = 0; index < s_schemas_count; ++index) {
@@ -62,27 +62,36 @@ void crystalize_init(const crystalize_config_t* config) {
   s_schemas_count = 0;
   s_schemas = NULL;
 
-  crystalize_schema_init(&s_schema_schema_field, "__crystalize_schema_field", 0, alignof(crystalize_schema_field_t), s_schema_schema_field_fields, 6);
-  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 0, "name_id", CRYSTALIZE_UINT32, 1);
-  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 1, "struct_name_id", CRYSTALIZE_UINT32, 1);
-  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 2, "struct_version", CRYSTALIZE_UINT32, 1);
-  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 3, "count", CRYSTALIZE_UINT32, 1);
-  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 4, "count_field_name_id", CRYSTALIZE_UINT32, 1);
-  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 5, "type", CRYSTALIZE_UINT8, 1);
+  crystalize_schema_init(&s_schema_schema_field, "__crystalize_schema_field_t", 0, alignof(crystalize_schema_field_t), s_schema_schema_field_fields, 8);
+  crystalize_schema_field_init_counted_scalar(s_schema_schema_field_fields + 0, "name", CRYSTALIZE_CHAR, "name_size");
+  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 1, "name_size", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 2, "name_id", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 3, "struct_name_id", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 4, "struct_version", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 5, "count", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 6, "count_field_name_id", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_field_init_scalar(s_schema_schema_field_fields + 7, "type", CRYSTALIZE_UINT8, 1);
   crystalize_schema_add(&s_schema_schema_field);
 
-  crystalize_schema_init(&s_schema_schema, "__crystalize_schema", 0, alignof(crystalize_schema_t), s_schema_schema_fields, 5);
-  crystalize_schema_field_init_scalar(s_schema_schema_fields + 0, "name_id", CRYSTALIZE_UINT32, 1);
-  crystalize_schema_field_init_scalar(s_schema_schema_fields + 1, "version", CRYSTALIZE_UINT32, 1);
-  crystalize_schema_field_init_scalar(s_schema_schema_fields + 2, "alignment", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_init(&s_schema_schema, "__crystalize_schema_t", 0, alignof(crystalize_schema_t), s_schema_schema_fields, 7);
+  crystalize_schema_field_init_counted_scalar(s_schema_schema_fields + 0, "name", CRYSTALIZE_CHAR, "name_size");
+  crystalize_schema_field_init_counted_struct(s_schema_schema_fields + 1, "fields", &s_schema_schema_field, "field_count");
+  crystalize_schema_field_init_scalar(s_schema_schema_fields + 2, "name_size", CRYSTALIZE_UINT32, 1);
   crystalize_schema_field_init_scalar(s_schema_schema_fields + 3, "field_count", CRYSTALIZE_UINT32, 1);
-  crystalize_schema_field_init_counted_struct(s_schema_schema_fields + 4, "fields", &s_schema_schema_field, "field_count");
+  crystalize_schema_field_init_scalar(s_schema_schema_fields + 4, "name_id", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_field_init_scalar(s_schema_schema_fields + 5, "version", CRYSTALIZE_UINT32, 1);
+  crystalize_schema_field_init_scalar(s_schema_schema_fields + 6, "alignment", CRYSTALIZE_UINT32, 1);
   crystalize_schema_add(&s_schema_schema);
 }
 
 void crystalize_shutdown() {
-  for (int index = 0; index < s_schemas_count; ++index) {
-    crystalize_free((void*)s_schemas[index].fields);
+  for (int schema_index = 0; schema_index < s_schemas_count; ++schema_index) {
+    crystalize_schema_t* schema = s_schemas + schema_index;
+    for (uint32_t field_index = 0; field_index < schema->field_count; ++field_index) {
+      crystalize_free((void*)schema->fields[field_index].name);
+    }
+    crystalize_free((void*)schema->fields);
+    crystalize_free((void*)schema->name);
   }
   crystalize_free(s_schemas);
   s_schemas = NULL;
@@ -97,7 +106,10 @@ void crystalize_schema_field_init_scalar(crystalize_schema_field_t* field,
   crystalize_assert(field != NULL, "field cannot be null");
   crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(count > 0, "cannot have zero count");
-  field->name_id = fnv1a(name, strlen(name));
+  const uint32_t name_len = strlen(name);
+  field->name = name;
+  field->name_size = name_len + 1;
+  field->name_id = fnv1a(name, name_len);
   field->struct_name_id = 0;
   field->struct_version = 0;
   field->count = count;
@@ -113,7 +125,10 @@ void crystalize_schema_field_init_struct(crystalize_schema_field_t* field,
   crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(schema != NULL, "schema cannot be null");
   crystalize_assert(count > 0, "cannot have zero count");
-  field->name_id = fnv1a(name, strlen(name));
+  const uint32_t name_len = strlen(name);
+  field->name = name;
+  field->name_size = name_len + 1;
+  field->name_id = fnv1a(name, name_len);
   field->struct_name_id = schema->name_id;
   field->struct_version = schema->version;
   field->count = count;
@@ -128,7 +143,10 @@ void crystalize_schema_field_init_counted_scalar(crystalize_schema_field_t* fiel
   crystalize_assert(field != NULL, "field cannot be null");
   crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(count_field_name != NULL, "count_field_name cannot be null");
-  field->name_id = fnv1a(name, strlen(name));
+  const uint32_t name_len = strlen(name);
+  field->name = name;
+  field->name_size = name_len + 1;
+  field->name_id = fnv1a(name, name_len);
   field->struct_name_id = 0;
   field->struct_version = 0;
   field->count = 0;
@@ -144,7 +162,10 @@ void crystalize_schema_field_init_counted_struct(crystalize_schema_field_t* fiel
   crystalize_assert(name != NULL, "name cannot be null");
   crystalize_assert(schema != NULL, "schema cannot be null");
   crystalize_assert(count_field_name != NULL, "name cannot be null");
-  field->name_id = fnv1a(name, strlen(name));
+  const uint32_t name_len = strlen(name);
+  field->name = name;
+  field->name_size = name_len + 1;
+  field->name_id = fnv1a(name, name_len);
   field->struct_name_id = schema->name_id;
   field->struct_version = schema->version;
   field->count = 0;
@@ -159,7 +180,10 @@ void crystalize_schema_init(crystalize_schema_t* schema,
                             const crystalize_schema_field_t* fields,
                             uint32_t field_count) {
   crystalize_assert(schema != NULL, "schema cannot be null");
-  schema->name_id = fnv1a(name, strlen(name));
+  const uint32_t name_len = strlen(name);
+  schema->name = name;
+  schema->name_size = name_len + 1;
+  schema->name_id = fnv1a(name, name_len);
   schema->version = version;
   schema->alignment = alignment;
   schema->fields = fields;
@@ -234,6 +258,7 @@ crystalize_error_t crystalize_schema_add(const crystalize_schema_t* schema) {
   crystalize_schema_field_t* fields_copy = (crystalize_schema_field_t*)crystalize_alloc(schema->field_count * sizeof(crystalize_schema_field_t));
   for (uint32_t field_index = 0; field_index < schema->field_count; ++field_index) {
     *(fields_copy + field_index) = *(schema->fields + field_index);
+    fields_copy[field_index].name = crystalize_strdup(fields_copy[field_index].name);
   }
 
   if (s_schemas_count >= s_schemas_capacity) {
@@ -241,6 +266,7 @@ crystalize_error_t crystalize_schema_add(const crystalize_schema_t* schema) {
     s_schemas = (crystalize_schema_t*)crystalize_realloc(s_schemas, s_schemas_capacity * sizeof(crystalize_schema_t*));
   }
   s_schemas[s_schemas_count] = *schema;
+  s_schemas[s_schemas_count].name = crystalize_strdup(s_schemas[s_schemas_count].name);
   s_schemas[s_schemas_count].fields = fields_copy;
   ++s_schemas_count;
 

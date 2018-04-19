@@ -21,3 +21,5 @@ void* crystalize_realloc_ex(void* ptr, size_t size, const char* file, int line, 
 void default_assert_handler(const char* file, int line, const char* func, const char* expression, const char* message);
 void* default_alloc_handler(size_t size, const char* file, int line, const char* func);
 void default_free_handler(void* ptr, const char* file, int line, const char* func);
+
+char* crystalize_strdup(const char* str);
