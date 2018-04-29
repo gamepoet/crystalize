@@ -83,7 +83,7 @@ TEST_CASE("schema registration") {
     crystalize_schema_field_t fields[2];
     crystalize_schema_field_init_scalar(fields + 0, "a", CRYSTALIZE_BOOL, 1);
     crystalize_schema_field_init_scalar(fields + 1, "b", CRYSTALIZE_INT32, 3);
-    crystalize_schema_init(&schema, "simple", 0, 4, fields, 2);
+    crystalize_schema_init(&schema, "simple", 0, fields, 2);
 
     crystalize_schema_add(&schema);
     const crystalize_schema_t* found = crystalize_schema_get(schema.name_id, 0);
@@ -109,7 +109,7 @@ TEST_CASE("encoding") {
     crystalize_schema_field_t fields[2];
     crystalize_schema_field_init_scalar(fields + 0, "a", CRYSTALIZE_BOOL, 1);
     crystalize_schema_field_init_scalar(fields + 1, "b", CRYSTALIZE_INT32, 3);
-    crystalize_schema_init(&schema, "simple", 0, alignof(simple_t), fields, 2);
+    crystalize_schema_init(&schema, "simple", 0, fields, 2);
     crystalize_schema_add(&schema);
 
     simple_t data;
@@ -124,22 +124,20 @@ TEST_CASE("encoding") {
       0x00, 0x00, 0x00, 0x00, // encoding version
       0x01, 0x00, 0x00, 0x00, // endian
       0x08, 0x00, 0x00, 0x00, // pointer size + pad
-      0xa4, 0x00, 0x00, 0x00, // offset to the data section from the start of the file
-      0xb4, 0x00, 0x00, 0x00, // offset to the pointer fixup table
+      0x9c, 0x00, 0x00, 0x00, // offset to the data section from the start of the file
+      0xac, 0x00, 0x00, 0x00, // offset to the pointer fixup table
       0x04, 0x00, 0x00, 0x00, // pointer fixup count
       0x01, 0x00, 0x00, 0x00, // schema count
 
       // crystalize_schema_t
-      0x28, 0x00, 0x00, 0x00, // name pointer relative offset (8 bytes)
+      0x20, 0x00, 0x00, 0x00, // name pointer relative offset (8 bytes)
       0x00, 0x00, 0x00, 0x00, // (more pointer)
-      0x27, 0x00, 0x00, 0x00, // fields pointer relative offset (8 bytes)
+      0x1f, 0x00, 0x00, 0x00, // fields pointer relative offset (8 bytes)
       0x00, 0x00, 0x00, 0x00, // (more pointer)
       0x07, 0x00, 0x00, 0x00, // name_size
       0x02, 0x00, 0x00, 0x00, // field_count
       0x7f, 0x80, 0x66, 0x16, // name_id => fnv1a("simple")
       0x00, 0x00, 0x00, 0x00, // version
-      0x04, 0x00, 0x00, 0x00, // alignment
-      0x00, 0x00, 0x00, 0x00, // (pad)
 
       // "simple"
       0x73, 0x69, 0x6d, 0x70, // "simp"
@@ -179,8 +177,8 @@ TEST_CASE("encoding") {
 
       0x20, 0x00, 0x00, 0x00, // pointer table
       0x28, 0x00, 0x00, 0x00, // pointer table
-      0x50, 0x00, 0x00, 0x00, // pointer table
-      0x78, 0x00, 0x00, 0x00, // pointer table
+      0x48, 0x00, 0x00, 0x00, // pointer table
+      0x70, 0x00, 0x00, 0x00, // pointer table
         // clang-format on
     };
     crystalize_encode_result_t buf_expected = {0};
@@ -215,7 +213,7 @@ TEST_CASE("encoding") {
     crystalize_schema_field_init_scalar(fields + 0, "a", CRYSTALIZE_CHAR, 1);
     crystalize_schema_field_init_scalar(fields + 1, "b_count", CRYSTALIZE_INT16, 1);
     crystalize_schema_field_init_counted_scalar(fields + 2, "b", CRYSTALIZE_FLOAT, "b_count");
-    crystalize_schema_init(&schema, "root", 0, alignof(root_t), fields, 3);
+    crystalize_schema_init(&schema, "root", 0, fields, 3);
     crystalize_schema_add(&schema);
 
     float values[4] = {1.0f, 2.0f, 3.0f, 4.0f};
@@ -258,14 +256,14 @@ TEST_CASE("encoding") {
     crystalize_schema_field_t schema_inner_fields[2];
     crystalize_schema_field_init_scalar(schema_inner_fields + 0, "a", CRYSTALIZE_UINT32, 1);
     crystalize_schema_field_init_scalar(schema_inner_fields + 1, "b", CRYSTALIZE_UINT8, 1);
-    crystalize_schema_init(&schema_inner, "inner", 0, alignof(inner_t), schema_inner_fields, 2);
+    crystalize_schema_init(&schema_inner, "inner", 0, schema_inner_fields, 2);
     crystalize_schema_add(&schema_inner);
     crystalize_schema_t schema_root;
     crystalize_schema_field_t schema_root_fields[3];
     crystalize_schema_field_init_scalar(schema_root_fields + 0, "a", CRYSTALIZE_INT8, 1);
     crystalize_schema_field_init_struct(schema_root_fields + 1, "b", &schema_inner, 1);
     crystalize_schema_field_init_scalar(schema_root_fields + 2, "c", CRYSTALIZE_UINT32, 1);
-    crystalize_schema_init(&schema_root, "root", 0, alignof(root_t), schema_root_fields, 3);
+    crystalize_schema_init(&schema_root, "root", 0, schema_root_fields, 3);
     crystalize_schema_add(&schema_root);
 
     root_t data;

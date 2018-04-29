@@ -10,6 +10,8 @@
 #define ALIGN(x, align) (((x) + (align)-1) & (~((align)-1)))
 #define ALIGN_PTR(T, p, align) ((T*)ALIGN((uintptr_t)(p), (uintptr_t)align))
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 extern crystalize_schema_t s_schema_schema;
 
 typedef struct schema_list_t {
@@ -50,6 +52,7 @@ typedef struct write_queue_t {
 
 typedef struct encoder_t {
   writer_t writer;
+  schema_list_t schemas;
   write_queue_t todo_list;
   pointer_fixup_list_t pointer_fixups;
   pointer_remap_list_t pointer_remaps;
@@ -169,12 +172,19 @@ static bool field_is_pointer_counted(const crystalize_schema_field_t* field) {
   return field->count == 0 && field->count_field_name_id != 0;
 }
 
+static uint32_t struct_get_alignment(const crystalize_schema_t* schema);
 static uint32_t field_get_alignment(const crystalize_schema_field_t* field) {
   if (field_is_pointer(field)) {
     return alignof(void*);
   }
   else {
-    return type_get_alignment(field->type);
+    if (field->type == CRYSTALIZE_STRUCT) {
+      const crystalize_schema_t* field_schema = crystalize_schema_get(field->struct_name_id, field->struct_version);
+      return struct_get_alignment(field_schema);
+    }
+    else {
+      return type_get_alignment(field->type);
+    }
   }
 }
 
@@ -208,7 +218,12 @@ static uint32_t field_get_value_as_uint32(const crystalize_schema_field_t* field
 }
 
 static uint32_t struct_get_alignment(const crystalize_schema_t* schema) {
-  return schema->alignment;
+  uint32_t schema_alignment = 1;
+  for (uint32_t index = 0; index < schema->field_count; ++index) {
+    const crystalize_schema_field_t* field = schema->fields + index;
+    schema_alignment = MAX(schema_alignment, field_get_alignment(field));
+  }
+  return schema_alignment;
 }
 
 static int schema_compare(const void* a, const void* b) {
@@ -322,6 +337,7 @@ static void convert_pointers_to_offsets(encoder_t* encoder) {
 static void encoder_free(encoder_t* encoder) {
   array_free(&encoder->pointer_remaps.entries, &encoder->pointer_remaps.count, &encoder->pointer_remaps.capacity);
   array_free(&encoder->pointer_fixups.entries, &encoder->pointer_fixups.count, &encoder->pointer_fixups.capacity);
+  array_free(&encoder->schemas.entries, &encoder->schemas.count, &encoder->schemas.capacity);
 }
 
 static void write_scalars(encoder_t* encoder, crystalize_type_t type, uint32_t count, const void* data_in) {
@@ -455,8 +471,7 @@ void encoder_encode(const crystalize_schema_t* schema, const void* data, crystal
   encoder_t encoder = {0};
 
   // gather up and count up all the unique schemas
-  schema_list_t schemas = {0};
-  gather_schemas(result, &schemas, schema);
+  gather_schemas(result, &encoder.schemas, schema);
   if (result->error != CRYSTALIZE_ERROR_NONE) {
     return;
   }
@@ -476,14 +491,15 @@ void encoder_encode(const crystalize_schema_t* schema, const void* data, crystal
   writer_write_u32(&encoder.writer, 0); // offset to the start of the pointer fixup pointer_table
   const uint32_t pointer_table_count_offset = encoder.writer.cur;
   writer_write_u32(&encoder.writer, 0); // number of pointers in the pointer table
-  writer_write_u32(&encoder.writer, schemas.count);
+  writer_write_u32(&encoder.writer, encoder.schemas.count);
 
   // schemas
-  write_queue_push(&encoder.todo_list, CRYSTALIZE_STRUCT, &s_schema_schema, schemas.count, schemas.entries);
+  write_queue_push(&encoder.todo_list, CRYSTALIZE_STRUCT, &s_schema_schema, encoder.schemas.count, encoder.schemas.entries);
   encoder_run(&encoder);
 
   // write into the header the offset to the start of the data
-  writer_align(&encoder.writer, schema->alignment);
+  uint32_t schema_alignment = struct_get_alignment(schema);
+  writer_align(&encoder.writer, schema_alignment);
   memmove(encoder.writer.buf + header_data_start_offset, &encoder.writer.cur, sizeof(uint32_t));
 
   // data
@@ -499,7 +515,6 @@ void encoder_encode(const crystalize_schema_t* schema, const void* data, crystal
   result->buf = encoder.writer.buf;
   result->buf_size = encoder.writer.cur;
 
-  // free the schemas gather buffer and the encoder
-  array_free(&schemas.entries, &schemas.count, &schemas.capacity);
+  // free the encoder
   encoder_free(&encoder);
 }

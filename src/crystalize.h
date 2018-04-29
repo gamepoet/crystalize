@@ -58,7 +58,6 @@ typedef struct crystalize_schema_t {
   uint32_t field_count;                    // the number of fields that make up this struct
   uint32_t name_id;                        // hash(name) of this field
   uint32_t version;                        // the version of the struct
-  uint32_t alignment;                      // alignment of this struct
 } crystalize_schema_t;
 
 typedef struct crystalize_encode_result_t {
@@ -110,7 +109,6 @@ void crystalize_schema_field_init_counted_struct(crystalize_schema_field_t* fiel
 void crystalize_schema_init(crystalize_schema_t* schema,
                             const char* name,
                             uint32_t version,
-                            uint32_t alignment,
                             const crystalize_schema_field_t* fields,
                             uint32_t field_count);
 
